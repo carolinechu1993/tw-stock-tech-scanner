@@ -157,6 +157,13 @@ with st.sidebar:
     cc2.button("全選", on_click=select_all, use_container_width=True)
     cc3.button("清空", on_click=deselect_all, use_container_width=True)
 
+    st.divider()
+    compact_mode = st.toggle(
+        "📱 緊湊模式（手機推薦）",
+        value=False,
+        help="隱藏「命中規則」與「分類分布」等長文字欄，手機螢幕看更清爽",
+    )
+
     by_cat_sb = {}
     for rid in RULE_LABELS:
         cat = cfg_static["rules"].get(rid, {}).get("category", "")
@@ -247,7 +254,29 @@ with tab_rank:
     st.caption(
         f"掃描時間：{scan_ts}　|　使用 {len(enabled_tuple)} / {len(RULE_LABELS)} 條規則"
     )
-    st.dataframe(display_df[cols_order], width="stretch", hide_index=True)
+    if compact_mode:
+        compact_cols = [c for c in ["代號", "名稱", "收盤價", "命中數", "資料日"]
+                        if c in display_df.columns]
+        rank_cols = compact_cols
+    else:
+        rank_cols = cols_order
+
+    rank_col_config = {
+        "代號": st.column_config.TextColumn("代號", width="small"),
+        "名稱": st.column_config.TextColumn("名稱", width="small"),
+        "收盤價": st.column_config.NumberColumn("收盤價", width="small", format="%.2f"),
+        "資料日": st.column_config.TextColumn("資料日", width="small"),
+        "命中數": st.column_config.NumberColumn("命中", width="small"),
+        "命中規則": st.column_config.TextColumn("命中規則", width="large"),
+        "分類分布": st.column_config.TextColumn("分類分布", width="medium"),
+        "錯誤": st.column_config.TextColumn("錯誤", width="medium"),
+    }
+    st.dataframe(
+        display_df[rank_cols],
+        width="stretch",
+        hide_index=True,
+        column_config={k: v for k, v in rank_col_config.items() if k in rank_cols},
+    )
 
 # ---------- Tab 2: Per-stock detail ----------
 
@@ -277,7 +306,23 @@ with tab_detail:
                 "意義": desc.get("meaning", ""),
             })
         hit_table = pd.DataFrame(hit_rows)
-        st.dataframe(hit_table, width="stretch", hide_index=True)
+        if compact_mode:
+            hit_cols = ["規則", "分類", "命中"]
+        else:
+            hit_cols = list(hit_table.columns)
+        hit_col_config = {
+            "規則":     st.column_config.TextColumn("規則", width="medium"),
+            "分類":     st.column_config.TextColumn("分類", width="small"),
+            "命中":     st.column_config.TextColumn("命中", width="small"),
+            "計算說明": st.column_config.TextColumn("計算說明", width="medium"),
+            "意義":     st.column_config.TextColumn("意義", width="large"),
+        }
+        st.dataframe(
+            hit_table[hit_cols],
+            width="stretch",
+            hide_index=True,
+            column_config={k: v for k, v in hit_col_config.items() if k in hit_cols},
+        )
 
         fig = make_subplots(
             rows=4, cols=1, shared_xaxes=True,
