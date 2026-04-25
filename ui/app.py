@@ -222,10 +222,10 @@ with st.sidebar:
         st.caption(f"共 {len(cfg_static['universe'][universe_key])} 檔")
 
     col1, col2 = st.columns(2)
-    if col1.button("重新計算"):
+    if col1.button("重新計算", key="btn_recompute"):
         st.cache_data.clear()
         st.rerun()
-    if col2.button("強制重抓", type="primary"):
+    if col2.button("強制重抓", type="primary", key="btn_force_refresh"):
         st.cache_data.clear()
         st.session_state.force_counter += 1
         st.rerun()
@@ -246,7 +246,8 @@ with st.sidebar:
                     st.rerun()
         st.markdown("---")
         bc1, bc2 = st.columns(2)
-        if bc1.button("清空", use_container_width=True, disabled=not wl):
+        if bc1.button("清空", key="btn_wl_clear",
+                      use_container_width=True, disabled=not wl):
             st.session_state.watchlist = []
             save_watchlist()
             st.rerun()
@@ -290,16 +291,19 @@ with st.sidebar:
     st.markdown("**派別套用**")
     sc1, sc2 = st.columns(2)
     sc1.button("綜合派", on_click=select_school, args=("general",),
-               use_container_width=True,
+               use_container_width=True, key="btn_school_general",
                help="選取所有屬於綜合派的規則")
     sc2.button("朱家泓派", on_click=select_school, args=("zhu",),
-               use_container_width=True,
+               use_container_width=True, key="btn_school_zhu",
                help="選取所有屬於朱家泓派的規則")
 
     cc1, cc2, cc3 = st.columns(3)
-    cc1.button("預設", on_click=reset_to_default, use_container_width=True)
-    cc2.button("全選", on_click=select_all, use_container_width=True)
-    cc3.button("清空", on_click=deselect_all, use_container_width=True)
+    cc1.button("預設", on_click=reset_to_default,
+               use_container_width=True, key="btn_rules_default")
+    cc2.button("全選", on_click=select_all,
+               use_container_width=True, key="btn_rules_all")
+    cc3.button("清空", on_click=deselect_all,
+               use_container_width=True, key="btn_rules_clear")
 
     st.divider()
     compact_mode = st.toggle(
@@ -444,7 +448,8 @@ with tab_rank:
         label_visibility="collapsed",
         placeholder="從排行榜選擇要加入的股票…",
     )
-    if btn_col.button("加入", use_container_width=True,
+    if btn_col.button("加入", key="btn_add_to_wl",
+                      use_container_width=True,
                       disabled=not selected_to_add):
         wl = st.session_state.watchlist
         for s in selected_to_add:
