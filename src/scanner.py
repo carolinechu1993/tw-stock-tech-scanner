@@ -20,34 +20,40 @@ def build_data_source(cfg: dict, force_refresh: bool = False) -> YFinanceSource:
     raise ValueError(f"Unsupported data source: {cfg['data']['source']}")
 
 
+def _process_history(df: pd.DataFrame, sym: str, name: str, cfg: dict):
+    """Compute indicators+score for one stock. Returns (row_dict, results_or_none)."""
+    if df is None or len(df) < 30:
+        return ({"symbol": sym, "name": name,
+                 "error": "no data" if df is None else "insufficient history",
+                 "hits": 0}, None)
+    try:
+        results = evaluate(df, cfg["indicators"], cfg["rules"])
+        sc = score(results, cfg["rules"])
+        last = df.iloc[-1]
+        row = {
+            "symbol": sym, "name": name,
+            "close": round(float(last["close"]), 2),
+            "volume": int(last["volume"]),
+            "as_of": df.index[-1].strftime("%Y-%m-%d"),
+            **sc,
+        }
+        return (row, results)
+    except Exception as e:
+        return ({"symbol": sym, "name": name, "error": str(e), "hits": 0}, None)
+
+
 def scan(cfg: dict, universe_key: str = "test", force_refresh: bool = False) -> pd.DataFrame:
     src = build_data_source(cfg, force_refresh=force_refresh)
     universe: List[dict] = cfg["universe"][universe_key]
     days = cfg["data"]["history_days"]
+    symbols = [item["symbol"] for item in universe]
+    histories = src.get_history_batch(symbols, days)
     rows = []
     for item in universe:
         sym = item["symbol"]
         name = item.get("name", sym)
-        try:
-            df = src.get_history(sym, days)
-            if len(df) < 30:
-                rows.append({"symbol": sym, "name": name, "error": "insufficient history",
-                             "hits": 0, "weighted_score": 0.0})
-                continue
-            results = evaluate(df, cfg["indicators"], cfg["rules"])
-            sc = score(results, cfg["rules"])
-            last = df.iloc[-1]
-            rows.append({
-                "symbol": sym,
-                "name": name,
-                "close": round(float(last["close"]), 2),
-                "volume": int(last["volume"]),
-                "as_of": df.index[-1].strftime("%Y-%m-%d"),
-                **sc,
-            })
-        except Exception as e:
-            rows.append({"symbol": sym, "name": name, "error": str(e),
-                         "hits": 0, "weighted_score": 0.0})
+        row, _ = _process_history(histories.get(sym), sym, name, cfg)
+        rows.append(row)
     return to_dataframe(rows)
 
 
@@ -56,29 +62,18 @@ def scan_with_details(cfg: dict, universe_key: str = "test", force_refresh: bool
     src = build_data_source(cfg, force_refresh=force_refresh)
     universe: List[dict] = cfg["universe"][universe_key]
     days = cfg["data"]["history_days"]
+    symbols = [item["symbol"] for item in universe]
+    histories = src.get_history_batch(symbols, days)
     rows = []
     details = {}
     for item in universe:
         sym = item["symbol"]
         name = item.get("name", sym)
-        try:
-            df = src.get_history(sym, days)
-            if len(df) < 30:
-                continue
-            results = evaluate(df, cfg["indicators"], cfg["rules"])
-            sc = score(results, cfg["rules"])
-            last = df.iloc[-1]
-            rows.append({
-                "symbol": sym, "name": name,
-                "close": round(float(last["close"]), 2),
-                "volume": int(last["volume"]),
-                "as_of": df.index[-1].strftime("%Y-%m-%d"),
-                **sc,
-            })
+        df = histories.get(sym)
+        row, results = _process_history(df, sym, name, cfg)
+        rows.append(row)
+        if results is not None:
             details[sym] = (df, results)
-        except Exception as e:
-            rows.append({"symbol": sym, "name": name, "error": str(e),
-                         "hits": 0, "weighted_score": 0.0})
     return to_dataframe(rows), details
 
 
