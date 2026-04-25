@@ -42,9 +42,16 @@ def _process_history(df: pd.DataFrame, sym: str, name: str, cfg: dict):
         return ({"symbol": sym, "name": name, "error": str(e), "hits": 0}, None)
 
 
-def scan(cfg: dict, universe_key: str = "test", force_refresh: bool = False) -> pd.DataFrame:
+def _resolve_universe(cfg: dict, universe_or_key) -> List[dict]:
+    """Accept either a universe key (str, looked up in config) or a list of dicts."""
+    if isinstance(universe_or_key, str):
+        return cfg["universe"][universe_or_key]
+    return universe_or_key
+
+
+def scan(cfg: dict, universe_or_key="test_10", force_refresh: bool = False) -> pd.DataFrame:
     src = build_data_source(cfg, force_refresh=force_refresh)
-    universe: List[dict] = cfg["universe"][universe_key]
+    universe = _resolve_universe(cfg, universe_or_key)
     days = cfg["data"]["history_days"]
     symbols = [item["symbol"] for item in universe]
     histories = src.get_history_batch(symbols, days)
@@ -57,10 +64,15 @@ def scan(cfg: dict, universe_key: str = "test", force_refresh: bool = False) -> 
     return to_dataframe(rows)
 
 
-def scan_with_details(cfg: dict, universe_key: str = "test", force_refresh: bool = False):
-    """Same as scan() but also returns dict of {symbol -> (df, results)} for UI drill-down."""
+def scan_with_details(cfg: dict, universe_or_key="test_10", force_refresh: bool = False):
+    """Same as scan() but also returns dict of {symbol -> (df, results)} for UI drill-down.
+
+    `universe_or_key` accepts either:
+    - str: a key in cfg["universe"] (e.g. "test_10", "semiconductor")
+    - list[dict]: a dynamic universe with items {"symbol": ..., "name": ...}
+    """
     src = build_data_source(cfg, force_refresh=force_refresh)
-    universe: List[dict] = cfg["universe"][universe_key]
+    universe = _resolve_universe(cfg, universe_or_key)
     days = cfg["data"]["history_days"]
     symbols = [item["symbol"] for item in universe]
     histories = src.get_history_batch(symbols, days)

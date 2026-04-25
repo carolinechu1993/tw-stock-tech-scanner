@@ -1,9 +1,13 @@
+import json
 import sys
 from pathlib import Path
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
 TAIPEI_TZ = ZoneInfo("Asia/Taipei")
+WATCHLIST_KEY = "tw_scanner_watchlist_v1"
+CUSTOM_TEXT_KEY = "tw_scanner_custom_text_v1"
+WATCHLIST_LIMIT = 100
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -13,6 +17,8 @@ import streamlit as st
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+from streamlit_local_storage import LocalStorage
+
 from src.scanner import load_config, scan_with_details
 from src.indicators.trend import sma, macd
 from src.indicators.momentum import kd_taiwan, rsi
@@ -21,6 +27,7 @@ from src.signals.labels import (
     RULE_LABELS, CATEGORY_LABELS, SCHOOL_LABELS,
     rule_zh, cat_zh, school_zh, rule_desc,
 )
+from src.universe.utils import parse_tickers, validate_tickers, to_universe
 
 
 def get_schools(cfg, rule_id):
@@ -29,6 +36,33 @@ def get_schools(cfg, rule_id):
 
 def school_badge(schools):
     return " + ".join(school_zh(s) for s in schools)
+
+
+# ---------- LocalStorage helpers ----------
+
+_LS = LocalStorage()
+
+
+def _init_local_storage():
+    """Read persistent state from browser localStorage into session_state (once per session)."""
+    if st.session_state.get("_ls_loaded"):
+        return
+    raw_wl = _LS.getItem(WATCHLIST_KEY)
+    try:
+        st.session_state.watchlist = json.loads(raw_wl) if raw_wl else []
+    except Exception:
+        st.session_state.watchlist = []
+    if "custom_text" not in st.session_state:
+        st.session_state.custom_text = _LS.getItem(CUSTOM_TEXT_KEY) or ""
+    st.session_state._ls_loaded = True
+
+
+def save_watchlist():
+    _LS.setItem(WATCHLIST_KEY, json.dumps(st.session_state.watchlist))
+
+
+def save_custom_text():
+    _LS.setItem(CUSTOM_TEXT_KEY, st.session_state.get("custom_text", ""))
 
 st.set_page_config(
     page_title="台股技術分析掃描",
@@ -63,6 +97,7 @@ h1 { margin-bottom: 0.4rem; font-size: 1.6rem; }
 )
 
 cfg_static = load_config(ROOT / "config.yaml")
+_init_local_storage()
 
 st.title("台股技術分析掃描器")
 
@@ -78,6 +113,9 @@ CAT_ORDER = ["trend", "momentum", "volume", "volatility", "pattern"]
 
 # ---------- Sidebar ----------
 
+UNIVERSE_WATCHLIST = "__watchlist__"
+UNIVERSE_CUSTOM = "__custom__"
+
 universe_zh_map = {
     "test_10": "測試組（10 檔大型權值）",
     "semiconductor": "半導體族群",
@@ -87,6 +125,36 @@ universe_zh_map = {
     "popular_short": "短線熱門股",
     "etf_0050_top20": "0050 前 20 大成分股",
 }
+
+
+def universe_label(k: str) -> str:
+    if k == UNIVERSE_WATCHLIST:
+        n = len(st.session_state.get("watchlist", []))
+        return f"⭐ 我的觀察清單 ({n})"
+    if k == UNIVERSE_CUSTOM:
+        return "✍️ 自訂股票"
+    return universe_zh_map.get(k, k)
+
+
+def build_universe(universe_key: str):
+    """Resolve universe_key into (universe_list, error_message). Error means stop."""
+    if universe_key == UNIVERSE_WATCHLIST:
+        wl = st.session_state.get("watchlist", [])
+        if not wl:
+            return None, "⭐ 觀察清單為空，請先從其他股票池掃描後加入。"
+        return list(wl), None
+    if universe_key == UNIVERSE_CUSTOM:
+        raw = st.session_state.get("custom_text", "")
+        if not raw.strip():
+            return None, "✍️ 請在左側「自訂股票」框中貼入股票代號（一行一檔）。"
+        symbols = parse_tickers(raw)
+        symbols, truncated = validate_tickers(symbols, limit=WATCHLIST_LIMIT)
+        if not symbols:
+            return None, "✍️ 沒有有效的股票代號。請確認格式為 4-5 位數字。"
+        if truncated:
+            st.warning(f"⚠️ 超過 {WATCHLIST_LIMIT} 檔上限，已截斷至 {WATCHLIST_LIMIT} 檔")
+        return to_universe(symbols), None
+    return cfg_static["universe"][universe_key], None
 
 if "force_counter" not in st.session_state:
     st.session_state.force_counter = 0
@@ -124,15 +192,34 @@ def select_school(school):
 
 with st.sidebar:
     st.header("掃描設定")
-    universe_keys = list(cfg_static["universe"].keys())
+    universe_options = (
+        list(cfg_static["universe"].keys())
+        + [UNIVERSE_WATCHLIST, UNIVERSE_CUSTOM]
+    )
     universe_key = st.selectbox(
         "股票池",
-        universe_keys,
+        universe_options,
         index=0,
-        format_func=lambda k: universe_zh_map.get(k, k),
+        format_func=universe_label,
     )
-    n = len(cfg_static["universe"][universe_key])
-    st.caption(f"共 {n} 檔")
+
+    # Custom textarea (only when custom selected)
+    if universe_key == UNIVERSE_CUSTOM:
+        st.text_area(
+            "自訂股票（一行一檔，例：2330 或 2330.TW）",
+            key="custom_text",
+            height=150,
+            placeholder="2330\n2454\n3008",
+            help="支援 4-5 位數字代號，自動補 .TW / .TWO 後綴",
+            on_change=save_custom_text,
+        )
+        parsed_count = len(parse_tickers(st.session_state.get("custom_text", "")))
+        st.caption(f"已解析 {parsed_count} 檔")
+    elif universe_key == UNIVERSE_WATCHLIST:
+        wl_n = len(st.session_state.get("watchlist", []))
+        st.caption(f"共 {wl_n} 檔")
+    else:
+        st.caption(f"共 {len(cfg_static['universe'][universe_key])} 檔")
 
     col1, col2 = st.columns(2)
     if col1.button("重新計算"):
@@ -142,6 +229,60 @@ with st.sidebar:
         st.cache_data.clear()
         st.session_state.force_counter += 1
         st.rerun()
+
+    # ---------- Watchlist management ----------
+    st.divider()
+    wl = st.session_state.get("watchlist", [])
+    with st.expander(f"⭐ 觀察清單管理 ({len(wl)})", expanded=False):
+        if not wl:
+            st.caption("尚無項目。從排行榜底下選股加入。")
+        else:
+            for i, item in enumerate(wl):
+                c1, c2 = st.columns([4, 1])
+                c1.markdown(f"`{item['symbol']}` {item.get('name', '')}")
+                if c2.button("✕", key=f"rm_wl_{i}", help="移除"):
+                    st.session_state.watchlist.pop(i)
+                    save_watchlist()
+                    st.rerun()
+        st.markdown("---")
+        bc1, bc2 = st.columns(2)
+        if bc1.button("清空", use_container_width=True, disabled=not wl):
+            st.session_state.watchlist = []
+            save_watchlist()
+            st.rerun()
+        if wl:
+            csv_data = "symbol,name\n" + "\n".join(
+                f'{x["symbol"]},{x.get("name","")}' for x in wl
+            )
+            bc2.download_button(
+                "下載 CSV",
+                csv_data,
+                file_name="watchlist.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
+
+        uploaded = st.file_uploader("上傳 CSV 還原", type=["csv"], key="wl_upload")
+        if uploaded is not None:
+            try:
+                content = uploaded.read().decode("utf-8-sig")
+                imported = []
+                seen = set()
+                for line in content.strip().splitlines()[1:]:  # skip header
+                    parts = line.split(",")
+                    if not parts or not parts[0].strip():
+                        continue
+                    sym = parts[0].strip().upper()
+                    name = parts[1].strip() if len(parts) > 1 else sym
+                    if sym not in seen:
+                        seen.add(sym)
+                        imported.append({"symbol": sym, "name": name})
+                st.session_state.watchlist = imported[:WATCHLIST_LIMIT]
+                save_watchlist()
+                st.success(f"已匯入 {len(st.session_state.watchlist)} 檔")
+                st.rerun()
+            except Exception as e:
+                st.error(f"匯入失敗：{e}")
 
     st.divider()
     st.subheader("🎛️ 指標選擇")
@@ -189,13 +330,14 @@ with st.sidebar:
 # ---------- Scan ----------
 
 @st.cache_data(ttl=600, show_spinner="抓取資料並計算指標中...")
-def run_scan(universe_key: str, force_refresh: bool, _cache_buster: int,
+def run_scan(universe_tuple: tuple, force_refresh: bool, _cache_buster: int,
              enabled_rules: tuple):
     cfg = load_config(ROOT / "config.yaml")
     enabled_set = set(enabled_rules)
     for rid, rule_cfg in cfg["rules"].items():
         rule_cfg["enabled"] = rid in enabled_set
-    ranking, details = scan_with_details(cfg, universe_key, force_refresh=force_refresh)
+    universe = [{"symbol": s, "name": n} for s, n in universe_tuple]
+    ranking, details = scan_with_details(cfg, universe, force_refresh=force_refresh)
     scan_ts = datetime.now(TAIPEI_TZ).strftime("%Y-%m-%d %H:%M:%S")
     return ranking, details, scan_ts
 
@@ -208,9 +350,15 @@ if not enabled_tuple:
     st.warning("⚠️ 至少要選一條指標才能掃描，請從左側「指標選擇」勾選。")
     st.stop()
 
+universe_list, universe_err = build_universe(universe_key)
+if universe_err:
+    st.warning(universe_err)
+    st.stop()
+universe_tuple = tuple((d["symbol"], d.get("name", d["symbol"])) for d in universe_list)
+
 force_now = st.session_state.force_counter > 0
 ranking, details, scan_ts = run_scan(
-    universe_key, force_now, st.session_state.force_counter, enabled_tuple
+    universe_tuple, force_now, st.session_state.force_counter, enabled_tuple
 )
 st.session_state.force_counter = 0
 
@@ -280,6 +428,33 @@ with tab_rank:
         hide_index=True,
         column_config={k: v for k, v in rank_col_config.items() if k in rank_cols},
     )
+
+    # ⭐ Add to watchlist
+    st.divider()
+    st.markdown("**⭐ 從本次排行榜加入觀察清單**")
+    name_lookup = {row["symbol"]: row.get("name", row["symbol"])
+                   for _, row in ranking.iterrows() if "symbol" in row}
+    existing_syms = {item["symbol"] for item in st.session_state.get("watchlist", [])}
+    selectable_syms = [s for s in name_lookup if s not in existing_syms]
+    add_col, btn_col = st.columns([3, 1])
+    selected_to_add = add_col.multiselect(
+        "選股加入",
+        options=selectable_syms,
+        format_func=lambda s: f"{s} {name_lookup.get(s, '')}",
+        label_visibility="collapsed",
+        placeholder="從排行榜選擇要加入的股票…",
+    )
+    if btn_col.button("加入", use_container_width=True,
+                      disabled=not selected_to_add):
+        wl = st.session_state.watchlist
+        for s in selected_to_add:
+            if len(wl) >= WATCHLIST_LIMIT:
+                st.warning(f"⚠️ 觀察清單已滿（{WATCHLIST_LIMIT} 檔上限）")
+                break
+            wl.append({"symbol": s, "name": name_lookup.get(s, s)})
+        save_watchlist()
+        st.success(f"已加入 {len(selected_to_add)} 檔到觀察清單")
+        st.rerun()
 
 # ---------- Tab 2: Per-stock detail ----------
 
