@@ -1,6 +1,9 @@
 import sys
 from pathlib import Path
 from datetime import datetime
+from zoneinfo import ZoneInfo
+
+TAIPEI_TZ = ZoneInfo("Asia/Taipei")
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -192,7 +195,9 @@ def run_scan(universe_key: str, force_refresh: bool, _cache_buster: int,
     enabled_set = set(enabled_rules)
     for rid, rule_cfg in cfg["rules"].items():
         rule_cfg["enabled"] = rid in enabled_set
-    return scan_with_details(cfg, universe_key, force_refresh=force_refresh)
+    ranking, details = scan_with_details(cfg, universe_key, force_refresh=force_refresh)
+    scan_ts = datetime.now(TAIPEI_TZ).strftime("%Y-%m-%d %H:%M:%S")
+    return ranking, details, scan_ts
 
 
 enabled_tuple = tuple(
@@ -204,7 +209,7 @@ if not enabled_tuple:
     st.stop()
 
 force_now = st.session_state.force_counter > 0
-ranking, details = run_scan(
+ranking, details, scan_ts = run_scan(
     universe_key, force_now, st.session_state.force_counter, enabled_tuple
 )
 st.session_state.force_counter = 0
@@ -243,8 +248,6 @@ cols_order = [c for c in
               ["代號", "名稱", "收盤價", "資料日", "命中數",
                "命中規則", "分類分布", "錯誤"]
               if c in display_df.columns]
-
-scan_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 tab_rank, tab_detail, tab_help = st.tabs(["📊 排行榜", "🔍 個股詳情", "📖 說明"])
 
