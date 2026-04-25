@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Virtual envs
+.venv/
+venv/
+env/
+
+# Local data cache (will be regenerated)
+cache/
+*.parquet
+ranking_*.csv
+
+# Streamlit secrets (NEVER commit)
+.streamlit/secrets.toml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Project artifacts
+review_bundle.txt
+.claude/
