@@ -68,11 +68,82 @@ def find_kd_oversold_golden(df: pd.DataFrame, p: dict) -> list[dict]:
     return out
 
 
+def find_bbands_upper_break(df: pd.DataFrame, p: dict) -> list[dict]:
+    """收盤突破布林上軌。"""
+    from ..indicators.volatility import bbands
+    b = bbands(df["close"], p["bbands"]["period"], p["bbands"]["std"])
+    out = []
+    for i in range(len(df)):
+        c = df["close"].iat[i]
+        u = b["upper"].iat[i]
+        if pd.isna(u):
+            continue
+        if c > u:
+            out.append({"date": df.index[i], "price": float(df["high"].iat[i])})
+    return out
+
+
+def find_long_lower_shadow(df: pd.DataFrame, p: dict) -> list[dict]:
+    """下影線 ≥ 實體 × 2，且出現於下跌段。"""
+    from ..indicators.trend import sma
+    ma20 = sma(df["close"], p["ma"]["mid"])
+    out = []
+    for i in range(5, len(df)):
+        o, c, h, low = (df["open"].iat[i], df["close"].iat[i],
+                        df["high"].iat[i], df["low"].iat[i])
+        body = abs(c - o)
+        body_eff = max(body, 0.01)
+        lower_shadow = min(c, o) - low
+        if lower_shadow <= 0 or lower_shadow < body_eff * 2:
+            continue
+        # 下跌段判定
+        declined = c < df["close"].iat[i - 5]
+        below_ma20 = (not pd.isna(ma20.iat[i])) and c < ma20.iat[i]
+        if declined or below_ma20:
+            out.append({"date": df.index[i], "price": float(low)})
+    return out
+
+
+def find_double_bottom(df: pd.DataFrame, p: dict) -> list[dict]:
+    """W 底兩個低點 + 反彈確認。回傳兩個低點的日期與價位以便連線。"""
+    if len(df) < 31:
+        return []
+    out = []
+    # 滑動視窗：以每日為終點，往回看 30 天找 W 底
+    # 但這會產生太多重疊，改為：找最後一個有效 W 底
+    recent = df.tail(30)
+    lows = recent["low"].values
+    closes = recent["close"].values
+    local_min_idx = []
+    for i in range(2, len(lows) - 2):
+        if (lows[i] < lows[i - 1] and lows[i] < lows[i + 1]
+                and lows[i] <= lows[i - 2] and lows[i] <= lows[i + 2]):
+            local_min_idx.append(i)
+    if len(local_min_idx) >= 2:
+        i1, i2 = local_min_idx[-2], local_min_idx[-1]
+        if i2 - i1 >= 5:
+            low1, low2 = lows[i1], lows[i2]
+            similar = abs(low2 - low1) / low1 < 0.05
+            second_higher = low2 >= low1
+            bounced = closes[-1] > low2 * 1.02
+            if similar and second_higher and bounced:
+                out.append({
+                    "first_date": recent.index[i1],
+                    "first_price": float(low1),
+                    "second_date": recent.index[i2],
+                    "second_price": float(low2),
+                })
+    return out
+
+
 # Marker registry: rule_id -> finder function
 MARKER_FINDERS = {
     "ma_golden_cross": find_ma_golden_cross,
     "volume_breakout": find_volume_breakout,
     "kd_oversold_golden": find_kd_oversold_golden,
+    "bbands_upper_break": find_bbands_upper_break,
+    "long_lower_shadow": find_long_lower_shadow,
+    "double_bottom": find_double_bottom,
 }
 
 

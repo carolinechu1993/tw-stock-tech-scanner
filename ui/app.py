@@ -788,6 +788,54 @@ with tab_detail:
                     hovertemplate=f"{label}<br>%{{x|%Y-%m-%d}}<br>K=%{{y:.1f}}<extra></extra>",
                 ), row=3, col=1)
 
+            elif rule_id == "bbands_upper_break":
+                # K 線那根上方畫 ★
+                xs = [o["date"] for o in occurrences]
+                ys = [o["price"] * 1.012 for o in occurrences]  # 略高於 high
+                fig.add_trace(go.Scatter(
+                    x=xs, y=ys, name=f"⭐ {label}",
+                    mode="markers",
+                    marker=dict(symbol="star", size=13,
+                                color="#9c27b0",
+                                line=dict(width=1.2, color="#6a1b9a")),
+                    hovertemplate=f"{label}<br>%{{x|%Y-%m-%d}}<extra></extra>",
+                ), row=1, col=1)
+
+            elif rule_id == "long_lower_shadow":
+                # K 線下方畫 ⤴ 朝上箭頭
+                xs = [o["date"] for o in occurrences]
+                ys = [o["price"] * 0.985 for o in occurrences]
+                fig.add_trace(go.Scatter(
+                    x=xs, y=ys, name=f"⭐ {label}",
+                    mode="markers+text",
+                    marker=dict(symbol="arrow-up", size=14,
+                                color="#1565c0",
+                                line=dict(width=1.2, color="#0d3d8a")),
+                    text=["止跌"] * len(xs),
+                    textposition="bottom center",
+                    textfont=dict(size=10, color="#1565c0"),
+                    hovertemplate=f"{label}<br>%{{x|%Y-%m-%d}}<extra></extra>",
+                ), row=1, col=1)
+
+            elif rule_id == "double_bottom":
+                # 兩個低點畫圓圈，並用虛線連起
+                for occ in occurrences:
+                    fig.add_trace(go.Scatter(
+                        x=[occ["first_date"], occ["second_date"]],
+                        y=[occ["first_price"] * 0.99, occ["second_price"] * 0.99],
+                        name=f"⭐ {label}",
+                        mode="lines+markers+text",
+                        marker=dict(symbol="circle", size=14,
+                                    color="rgba(255,255,255,0)",
+                                    line=dict(width=2, color="#e91e63")),
+                        line=dict(width=1.5, color="#e91e63", dash="dash"),
+                        text=["第一腳", "第二腳"],
+                        textposition="bottom center",
+                        textfont=dict(size=10, color="#e91e63"),
+                        hovertemplate=f"{label}<extra></extra>",
+                        showlegend=True,
+                    ), row=1, col=1)
+
         # ---- Layout ----
         fig.update_layout(
             height=720,
