@@ -731,12 +731,12 @@ with tab_detail:
             "ma_golden_cross":         dict(pane=0, shape="arrowUp", pos="belowBar", color="#ff8c00", text="金叉"),
             "ma_bullish_alignment":    dict(pane=0, shape="arrowUp", pos="belowBar", color="#2e7d32", text="排列"),
             "ma_converge_breakout":    dict(pane=0, shape="arrowUp", pos="aboveBar", color="#fbc02d", text="糾結突破"),
-            "pullback_holds_ma20":     dict(pane=0, shape="circle",  pos="inBar",    color="#1565c0", text="守月線"),
+            "pullback_holds_ma20":     dict(pane=0, shape="circle",  pos="belowBar", color="#1565c0", text="守月線"),
             "macd_hist_turn_positive": dict(pane=3, shape="arrowUp", pos="belowBar", color="#d32f2f", text="MACD翻紅"),
             "adx_strong_uptrend":      dict(pane=0, shape="circle",  pos="belowBar", color="#1b5e20", text="ADX強"),
             # 動能類
             "kd_oversold_golden":      dict(pane=2, shape="arrowUp", pos="belowBar", color="#26a65b", text="KD金叉"),
-            "rsi_recover":             dict(pane=2, shape="circle",  pos="inBar",    color="#66bb6a", text="RSI"),
+            "rsi_recover":             dict(pane=2, shape="circle",  pos="belowBar", color="#66bb6a", text="RSI"),
             # 量價類
             "volume_breakout":         dict(pane=1, shape="arrowUp", pos="aboveBar", color="#ffb300", text="爆量"),
             "price_volume_surge":      dict(pane=1, shape="arrowUp", pos="aboveBar", color="#ffd54f", text="量價揚"),
@@ -749,19 +749,19 @@ with tab_detail:
             # 型態類
             "long_red_breakout":       dict(pane=0, shape="arrowUp", pos="aboveBar", color="#c62828", text="長紅"),
             "long_lower_shadow":       dict(pane=0, shape="arrowUp", pos="belowBar", color="#1565c0", text="止跌"),
-            "doji_or_spinning_top":    dict(pane=0, shape="circle",  pos="inBar",    color="#6a1b9a", text="變盤"),
+            "doji_or_spinning_top":    dict(pane=0, shape="circle",  pos="aboveBar", color="#6a1b9a", text="變盤"),
             "double_bottom":           dict(pane=0, shape="arrowUp", pos="belowBar", color="#e91e63", text="W底"),
             # ===== 空頭/出場訊號（arrowDown + 冷色系）=====
             # 趨勢類 反向
             "ma_death_cross":          dict(pane=0, shape="arrowDown", pos="aboveBar", color="#5e35b1", text="死叉"),
             "ma_bearish_alignment":    dict(pane=0, shape="arrowDown", pos="aboveBar", color="#3949ab", text="空排"),
             "ma_converge_breakdown":   dict(pane=0, shape="arrowDown", pos="aboveBar", color="#283593", text="糾結跌破"),
-            "rebound_caps_ma20":       dict(pane=0, shape="circle",   pos="inBar",    color="#455a64", text="月線壓"),
+            "rebound_caps_ma20":       dict(pane=0, shape="circle",   pos="aboveBar", color="#455a64", text="月線壓"),
             "macd_hist_turn_negative": dict(pane=3, shape="arrowDown", pos="aboveBar", color="#37474f", text="MACD翻綠"),
             "adx_strong_downtrend":    dict(pane=0, shape="circle",   pos="aboveBar", color="#37474f", text="ADX空"),
             # 動能類 反向
             "kd_overbought_dead":      dict(pane=2, shape="arrowDown", pos="aboveBar", color="#4527a0", text="KD死叉"),
-            "rsi_overbought_drop":     dict(pane=2, shape="circle",   pos="inBar",    color="#546e7a", text="RSI落"),
+            "rsi_overbought_drop":     dict(pane=2, shape="circle",   pos="aboveBar", color="#546e7a", text="RSI落"),
             # 量價類 反向
             "volume_breakdown":        dict(pane=1, shape="arrowDown", pos="aboveBar", color="#00695c", text="爆量殺"),
             "price_volume_collapse":   dict(pane=1, shape="arrowDown", pos="aboveBar", color="#37474f", text="量增跌"),
