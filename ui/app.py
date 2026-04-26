@@ -27,6 +27,7 @@ from src.signals.labels import (
     RULE_LABELS, CATEGORY_LABELS, SCHOOL_LABELS,
     rule_zh, cat_zh, school_zh, rule_desc, rule_summary,
 )
+from src.signals.markers import find_markers, supported_rules as marker_rules
 from src.universe.utils import parse_tickers, validate_tickers, to_universe
 from src.universe import dynamic as dyn_univ
 
@@ -610,6 +611,20 @@ with tab_detail:
             column_config={k: v for k, v in hit_col_config.items() if k in hit_cols},
         )
 
+        # ---- Marker selection ----
+        marker_supported = marker_rules()
+        today_hit_with_marker = [name for name, r in results.items()
+                                 if r.hit and name in marker_supported]
+        marker_options = [r for r in marker_supported]
+        chosen_markers = st.multiselect(
+            "🎯 在圖上標記訊號",
+            options=marker_options,
+            default=today_hit_with_marker,
+            format_func=lambda r: f"{rule_zh(r)}（{rule_summary(r)}）",
+            help="標記過去 60 天所有觸發點。預設勾選今日命中的規則。",
+            key="marker_select",
+        )
+
         # ---------- Color palette ----------
         CL = {
             "k_up": "#d62728",      # 台股紅
@@ -716,6 +731,62 @@ with tab_detail:
                                  line=dict(width=1.4, color=CL["macd_sig"]),
                                  hovertemplate="MACD %{y:.3f}<extra></extra>"),
                       row=4, col=1)
+
+        # ---- Rule markers ----
+        marker_params = cfg_static["indicators"]
+        marker_params["volume"] = cfg_static["indicators"]["volume"]  # ensure key
+        marker_params["kd"] = cfg_static["indicators"]["kd"]
+        marker_params["ma"] = cfg_static["indicators"]["ma"]
+
+        for rule_id in chosen_markers:
+            occurrences = find_markers(rule_id, df, marker_params)
+            if not occurrences:
+                continue
+            label = rule_zh(rule_id)
+
+            if rule_id == "ma_golden_cross":
+                # 紅 K 圖下方畫 ↑ 三角
+                xs = [o["date"] for o in occurrences]
+                ys = [o["price"] * 0.985 for o in occurrences]  # 略低於最低
+                fig.add_trace(go.Scatter(
+                    x=xs, y=ys, name=f"⭐ {label}",
+                    mode="markers+text",
+                    marker=dict(symbol="triangle-up", size=14,
+                                color="#ff8c00",
+                                line=dict(width=1.5, color="#cc7000")),
+                    text=["金叉"] * len(xs),
+                    textposition="bottom center",
+                    textfont=dict(size=10, color="#cc7000"),
+                    hovertemplate=f"{label}<br>%{{x|%Y-%m-%d}}<extra></extra>",
+                ), row=1, col=1)
+
+            elif rule_id == "volume_breakout":
+                # 量子圖那根改色（畫 marker 在量上方）
+                xs = [o["date"] for o in occurrences]
+                ys = [o["volume"] * 1.05 for o in occurrences]
+                fig.add_trace(go.Scatter(
+                    x=xs, y=ys, name=f"⭐ {label}",
+                    mode="markers",
+                    marker=dict(symbol="star", size=12,
+                                color="#ffb300",
+                                line=dict(width=1.2, color="#cc7a00")),
+                    hovertemplate=(f"{label}<br>%{{x|%Y-%m-%d}}<br>"
+                                   "量 %{customdata:.1f}× 5MA<extra></extra>"),
+                    customdata=[o["ratio"] for o in occurrences],
+                ), row=2, col=1)
+
+            elif rule_id == "kd_oversold_golden":
+                # KD 子圖加綠色三角
+                xs = [o["date"] for o in occurrences]
+                ys = [o["k"] for o in occurrences]
+                fig.add_trace(go.Scatter(
+                    x=xs, y=ys, name=f"⭐ {label}",
+                    mode="markers",
+                    marker=dict(symbol="triangle-up", size=12,
+                                color="#26a65b",
+                                line=dict(width=1.2, color="#1e7d44")),
+                    hovertemplate=f"{label}<br>%{{x|%Y-%m-%d}}<br>K=%{{y:.1f}}<extra></extra>",
+                ), row=3, col=1)
 
         # ---- Layout ----
         fig.update_layout(
