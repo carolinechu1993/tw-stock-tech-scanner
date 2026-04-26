@@ -622,9 +622,9 @@ with tab_detail:
                                  if r.hit and name in marker_supported]
         marker_options = [r for r in marker_supported]
 
-        # 切換股票時 → 重置 multiselect
+        # 切換股票時 → 直接覆蓋 multiselect 值為當前股的 hits
         if st.session_state.get("_marker_last_stock") != selected:
-            st.session_state.pop("marker_select", None)
+            st.session_state["marker_select"] = list(today_hit_with_marker)
             st.session_state["_marker_last_stock"] = selected
 
         chosen_markers = st.multiselect(
@@ -722,7 +722,7 @@ with tab_detail:
                     "position": cfg_m["pos"],
                     "color": cfg_m["color"],
                     "shape": cfg_m["shape"],
-                    "text": cfg_m["text"],
+                    # 不放 text — 由下方標記對照表辨識，避免圖上太花
                 })
         for k_p in markers_by_pane:
             markers_by_pane[k_p].sort(key=lambda x: x["time"])
@@ -798,10 +798,35 @@ with tab_detail:
 <div class="legend" id="legend-macd" style="top: 690px;"></div>
 
 <script>
+window.addEventListener('error', function(e) {
+  var d = document.createElement('div');
+  d.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#fee;color:#c00;padding:8px;font-size:11px;z-index:9999;border:1px solid #c00';
+  d.innerText = 'JS Error: ' + e.message + ' at ' + (e.filename || '?') + ':' + (e.lineno || '?');
+  document.body.appendChild(d);
+});
+
 const D = __PAYLOAD__;
 const MA_SHORT = __MA_SHORT__;
 const MA_MID = __MA_MID__;
+
+if (typeof LightweightCharts === 'undefined') {
+  document.body.innerHTML = '<div style="padding:20px;color:red;font-size:14px">❌ LightweightCharts CDN failed to load. Check network/sandbox.</div>';
+  throw new Error('LightweightCharts not loaded');
+}
 const LWC = LightweightCharts;
+
+// 等 iframe 父容器有實際寬度才建 chart（否則 canvas 畫在 0 寬不會顯示）
+function _waitWidth(cb, attempts) {
+  attempts = attempts || 0;
+  var div = document.getElementById('chart');
+  if (div && div.clientWidth > 100) { cb(); return; }
+  if (attempts > 100) { cb(); return; }  // give up after 5s, render anyway
+  setTimeout(function(){ _waitWidth(cb, attempts + 1); }, 50);
+}
+
+_waitWidth(function() { runChart(); });
+
+function runChart() {
 
 const chart = LWC.createChart(document.getElementById('chart'), {
   layout: {
@@ -953,6 +978,8 @@ window.addEventListener('resize', () => {
   chart.applyOptions({ width: document.getElementById('chart').clientWidth });
 });
 chart.timeScale().fitContent();
+
+}  // end runChart
 </script>
 </body>
 </html>
