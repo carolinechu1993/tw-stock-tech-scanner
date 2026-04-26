@@ -940,34 +940,52 @@ with tab_detail:
 </style>
 <script>
 (function() {{
-    function safeResize() {{
+    function applyExplicitWidth() {{
         var gd = document.getElementById("{plot_id}");
-        if (gd) {{
-            try {{ Plotly.Plots.resize(gd); }} catch(e) {{}}
-        }}
+        if (!gd) return false;
+        var parent = gd.parentElement || document.body;
+        var w = parent.clientWidth || window.innerWidth || 0;
+        if (w < 100) return false;  // 父容器尚未量好
+        try {{
+            // 明確指定寬度強制 plotly 重新計算 layout
+            Plotly.relayout(gd, {{ width: w, autosize: false }});
+            // 短暫延遲後恢復 autosize，方便後續 resize 自動 work
+            setTimeout(function() {{
+                try {{ Plotly.relayout(gd, {{ autosize: true, width: null }}); }} catch(e) {{}}
+                try {{ Plotly.Plots.resize(gd); }} catch(e) {{}}
+            }}, 100);
+            return true;
+        }} catch(e) {{ return false; }}
     }}
+
     function init() {{
         var gd = document.getElementById("{plot_id}");
         if (!gd || !gd.on) {{ setTimeout(init, 50); return; }}
 
-        // 暴力解：前 5 秒每 100ms 強制 resize 一次
-        var rerunCount = 0;
-        var rerunInterval = setInterval(function() {{
-            safeResize();
-            rerunCount++;
-            if (rerunCount > 50) clearInterval(rerunInterval);
+        // 第一階段：等到父容器有寬度時，明確 relayout 強制重畫
+        var success = false;
+        var fixAttempts = 0;
+        var fixInterval = setInterval(function() {{
+            if (applyExplicitWidth()) {{
+                success = true;
+                clearInterval(fixInterval);
+            }}
+            fixAttempts++;
+            if (fixAttempts > 80) clearInterval(fixInterval);  // 8 秒上限
         }}, 100);
 
-        // ResizeObserver 監聽容器尺寸變化
+        // 第二階段：監聽尺寸變化 + window 事件
         if (typeof ResizeObserver !== "undefined") {{
-            var ro = new ResizeObserver(safeResize);
+            var ro = new ResizeObserver(function() {{
+                try {{ Plotly.Plots.resize(gd); }} catch(e) {{}}
+            }});
             ro.observe(document.body);
             if (gd.parentElement) ro.observe(gd.parentElement);
             ro.observe(gd);
         }}
-        window.addEventListener("resize", safeResize);
-        window.addEventListener("load", safeResize);
-        document.addEventListener("DOMContentLoaded", safeResize);
+        window.addEventListener("resize", function() {{
+            try {{ Plotly.Plots.resize(gd); }} catch(e) {{}}
+        }});
 
         // Hover crosshair：paper-y shape 跨所有子圖
         var baseShapes = (gd.layout && gd.layout.shapes)
