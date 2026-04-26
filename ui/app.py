@@ -935,14 +935,17 @@ with tab_detail:
 <head>
 <meta charset="utf-8">
 <meta name="nonce" content="{_nonce}">
+<meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="pragma" content="no-cache">
+<meta http-equiv="expires" content="0">
 <style>
   html, body {{ margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; }}
   #{plot_id} {{ width: 100%; height: 100%; }}
 </style>
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 </head>
-<body>
-<div id="{plot_id}"></div>
+<body data-nonce="{_nonce}">
+<div id="{plot_id}" data-stock="{selected}" data-nonce="{_nonce}"></div>
 <script id="fig-data" type="application/json">{fig_json}</script>
 <script>
 (function() {{
@@ -1006,7 +1009,9 @@ with tab_detail:
 </body>
 </html>
 """
-        components.html(full_html, height=820, scrolling=False)
+        # 用 nonce 雜湊取出 0-9 的微擾值加到高度，迫使 Streamlit 認知為「新元件」必重建 iframe
+        _height_jitter = int(_nonce, 16) % 10
+        components.html(full_html, height=820 + _height_jitter, scrolling=False)
 
 # ---------- Tab 3: Help ----------
 
