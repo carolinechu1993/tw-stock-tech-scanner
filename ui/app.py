@@ -14,7 +14,9 @@ sys.path.insert(0, str(ROOT))
 
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 import plotly.graph_objects as go
+import plotly.io as pio
 from plotly.subplots import make_subplots
 
 from streamlit_local_storage import LocalStorage
@@ -886,77 +888,32 @@ with tab_detail:
         # Hide weekend gaps for daily K
         fig.update_xaxes(rangebreaks=[dict(bounds=["sat", "mon"])])
 
-        # ---- 日期選擇器（鎖定垂直線 + 精確讀值）----
-        date_strs = [d.strftime("%Y-%m-%d") for d in df.index]
-        date_options = ["（不鎖定）"] + date_strs
-        sel_date_str = st.selectbox(
-            "📍 選日期 → 圖上畫貫穿線並顯示精確指標",
-            options=date_options,
-            index=0,
-            key=f"date_picker_{selected}",
-            help="選定後，圖表四個子圖會出現一條藍色實線標示該日，下方卡片顯示完整數值",
+        # 強化 spike 跨子圖（在 raw plotly HTML 中真的會跨）
+        fig.update_xaxes(
+            showspikes=True,
+            spikecolor="#1f3a5f",
+            spikethickness=1.5,
+            spikedash="solid",
+            spikemode="across",
+            spikesnap="cursor",
         )
+        fig.update_layout(spikedistance=-1, hoverdistance=100)
 
-        locked_dt = None
-        if sel_date_str != "（不鎖定）":
-            try:
-                locked_dt = pd.to_datetime(sel_date_str)
-                fig.add_vline(
-                    x=locked_dt,
-                    line_color="#1f3a5f",
-                    line_width=2,
-                    line_dash="solid",
-                    annotation_text=f"📍 {sel_date_str}",
-                    annotation_position="top",
-                    annotation_font=dict(size=12, color="#1f3a5f"),
-                )
-            except Exception:
-                locked_dt = None
-
-        st.plotly_chart(fig, width="stretch")
-
-        # ---- 鎖定日詳細數值卡片 ----
-        if locked_dt is not None and locked_dt in df.index:
-            row = df.loc[locked_dt]
-            ma5_v = ma5_series.get(locked_dt, float("nan"))
-            ma20_v = ma20_series.get(locked_dt, float("nan"))
-            bb_u = b["upper"].get(locked_dt, float("nan"))
-            bb_l = b["lower"].get(locked_dt, float("nan"))
-            vol_ma_v = vol_ma5.get(locked_dt, float("nan"))
-            k_v = kd["k"].get(locked_dt, float("nan"))
-            d_v = kd["d"].get(locked_dt, float("nan"))
-            macd_dif = m["macd"].get(locked_dt, float("nan"))
-            macd_sig = m["signal"].get(locked_dt, float("nan"))
-            macd_h = m["hist"].get(locked_dt, float("nan"))
-
-            st.markdown(
-                f"#### 📍 {locked_dt.strftime('%Y-%m-%d')} "
-                f"({locked_dt.strftime('%a')}) 指標讀值"
-            )
-            col1, col2, col3, col4 = st.columns(4)
-            col1.metric("收盤", f"{row['close']:.2f}",
-                        f"{(row['close'] - row['open']):+.2f}")
-            col1.caption(f"開 {row['open']:.2f} | 高 {row['high']:.2f} | 低 {row['low']:.2f}")
-            col2.metric(f"MA{ind_p['ma']['short']}",
-                        f"{ma5_v:.2f}" if not pd.isna(ma5_v) else "—",
-                        f"{(row['close'] - ma5_v):+.2f}" if not pd.isna(ma5_v) else None)
-            col2.caption(
-                f"MA{ind_p['ma']['mid']}: "
-                f"{ma20_v:.2f}" if not pd.isna(ma20_v) else "—"
-            )
-            col2.caption(f"布林：{bb_l:.2f} ~ {bb_u:.2f}"
-                         if not pd.isna(bb_u) else "")
-            col3.metric("K 值",
-                        f"{k_v:.1f}" if not pd.isna(k_v) else "—",
-                        f"D={d_v:.1f}" if not pd.isna(d_v) else None)
-            col3.caption(f"成交量 {row['volume']:,.0f}")
-            col3.caption(f"量 MA5: {vol_ma_v:,.0f}" if not pd.isna(vol_ma_v) else "")
-            col4.metric("MACD 柱",
-                        f"{macd_h:+.3f}" if not pd.isna(macd_h) else "—",
-                        "翻紅" if (not pd.isna(macd_h)) and macd_h > 0
-                        else ("翻綠" if not pd.isna(macd_h) else None))
-            col4.caption(f"DIF {macd_dif:.3f}" if not pd.isna(macd_dif) else "")
-            col4.caption(f"MACD {macd_sig:.3f}" if not pd.isna(macd_sig) else "")
+        # 用 components.html 直接 embed plotly HTML，繞過 Streamlit 的 plotly 包裝
+        # 這樣 hovermode="x unified" + spike across 才會在多子圖正確跨行畫線
+        chart_html = pio.to_html(
+            fig,
+            include_plotlyjs="cdn",
+            full_html=False,
+            config={
+                "displayModeBar": True,
+                "displaylogo": False,
+                "modeBarButtonsToRemove": ["lasso2d", "select2d"],
+                "scrollZoom": True,
+            },
+        )
+        components.html(chart_html, height=760, scrolling=False)
+        st.caption("💡 滑鼠移到圖上即可看到貫穿四個子圖的垂直線與所有指標數值")
 
 # ---------- Tab 3: Help ----------
 
