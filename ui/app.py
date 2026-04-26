@@ -853,9 +853,6 @@ with tab_detail:
             xaxis_rangeslider_visible=False,
             showlegend=True,
             hovermode="x unified",
-            # 關鍵：讓 spike 跨子圖一直顯示
-            spikedistance=-1,
-            hoverdistance=100,
             hoverlabel=dict(
                 bgcolor="rgba(255,255,255,0.96)",
                 bordercolor="#888",
@@ -886,18 +883,11 @@ with tab_detail:
         # Grid styling
         fig.update_xaxes(showgrid=True, gridcolor=CL["grid"], gridwidth=1)
         fig.update_yaxes(showgrid=True, gridcolor=CL["grid"], gridwidth=1)
-        # Crosshair: vertical spike across all 4 subplots
-        # spikemode="across+marker" + spikedistance=-1 forces it to traverse all rows
-        fig.update_xaxes(
-            showspikes=True,
-            spikecolor="#1f3a5f",
-            spikethickness=1.5,
-            spikedash="solid",
-            spikemode="across+marker",
-            spikesnap="cursor",
-        )
-        # Hide weekend gaps for daily K (must come AFTER showspikes setup)
+        # Hide weekend gaps for daily K
         fig.update_xaxes(rangebreaks=[dict(bounds=["sat", "mon"])])
+        # Note: Plotly's per-axis spike won't cross subplots; we rely on
+        # hovermode='x unified' (already set in update_layout) which draws
+        # a single vertical line spanning all subplots in a shared-x figure.
 
         st.plotly_chart(fig, width="stretch")
 
