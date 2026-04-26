@@ -910,25 +910,40 @@ with tab_detail:
         # 注入 hover crosshair + 強制 resize（iframe 內 plotly 預設寬度抓不準）
         custom_js = f"""
 <style>
-  body, html {{ margin: 0; padding: 0; width: 100%; }}
-  #{plot_id} {{ width: 100% !important; }}
+  body, html {{ margin: 0; padding: 0; width: 100%; height: 100%; }}
+  #{plot_id} {{ width: 100% !important; height: 100% !important; }}
   .plotly-graph-div {{ width: 100% !important; }}
+  .js-plotly-plot {{ width: 100% !important; }}
 </style>
 <script>
 (function() {{
-    function safeResize(gd) {{
-        try {{ Plotly.Plots.resize(gd); }} catch(e) {{}}
+    function safeResize() {{
+        var gd = document.getElementById("{plot_id}");
+        if (gd) {{
+            try {{ Plotly.Plots.resize(gd); }} catch(e) {{}}
+        }}
     }}
     function init() {{
         var gd = document.getElementById("{plot_id}");
-        if (!gd || !gd.on) {{ setTimeout(init, 100); return; }}
+        if (!gd || !gd.on) {{ setTimeout(init, 50); return; }}
 
-        // 多次強制 resize（iframe 載入時序不同）
-        safeResize(gd);
-        setTimeout(function(){{ safeResize(gd); }}, 200);
-        setTimeout(function(){{ safeResize(gd); }}, 600);
-        window.addEventListener("resize", function() {{ safeResize(gd); }});
+        // 多階段重試 resize（iframe 載入時序不同）
+        [0, 50, 150, 300, 600, 1200, 2500].forEach(function(d) {{
+            setTimeout(safeResize, d);
+        }});
 
+        // ResizeObserver 監聽容器尺寸變化
+        if (typeof ResizeObserver !== "undefined") {{
+            var ro = new ResizeObserver(safeResize);
+            ro.observe(document.body);
+            if (gd.parentElement) ro.observe(gd.parentElement);
+            ro.observe(gd);
+        }}
+        window.addEventListener("resize", safeResize);
+        window.addEventListener("load", safeResize);
+        document.addEventListener("DOMContentLoaded", safeResize);
+
+        // Hover crosshair：paper-y shape 跨所有子圖
         var baseShapes = (gd.layout && gd.layout.shapes)
             ? JSON.parse(JSON.stringify(gd.layout.shapes)) : [];
         gd.on("plotly_hover", function(data) {{
