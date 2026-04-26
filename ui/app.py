@@ -853,11 +853,14 @@ with tab_detail:
             xaxis_rangeslider_visible=False,
             showlegend=True,
             hovermode="x unified",
+            # 關鍵：讓 spike 跨子圖一直顯示
+            spikedistance=-1,
+            hoverdistance=100,
             hoverlabel=dict(
                 bgcolor="rgba(255,255,255,0.96)",
                 bordercolor="#888",
                 font=dict(size=13, color="#222"),
-                namelength=-1,  # don't truncate trace names
+                namelength=-1,
             ),
             legend=dict(
                 orientation="h",
@@ -883,25 +886,17 @@ with tab_detail:
         # Grid styling
         fig.update_xaxes(showgrid=True, gridcolor=CL["grid"], gridwidth=1)
         fig.update_yaxes(showgrid=True, gridcolor=CL["grid"], gridwidth=1)
-        # Crosshair: vertical line spans all 4 subplots when hovering
+        # Crosshair: vertical spike across all 4 subplots
+        # spikemode="across+marker" + spikedistance=-1 forces it to traverse all rows
         fig.update_xaxes(
             showspikes=True,
             spikecolor="#1f3a5f",
             spikethickness=1.5,
             spikedash="solid",
-            spikemode="across",
+            spikemode="across+marker",
             spikesnap="cursor",
         )
-        # Horizontal spike on each row (helps reading exact value)
-        fig.update_yaxes(
-            showspikes=True,
-            spikecolor="#1f3a5f",
-            spikethickness=1,
-            spikedash="dot",
-            spikemode="toaxis",
-            spikesnap="cursor",
-        )
-        # Hide weekend gaps for daily K
+        # Hide weekend gaps for daily K (must come AFTER showspikes setup)
         fig.update_xaxes(rangebreaks=[dict(bounds=["sat", "mon"])])
 
         st.plotly_chart(fig, width="stretch")
