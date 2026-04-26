@@ -619,17 +619,20 @@ with tab_detail:
                                  if r.hit and name in marker_supported]
         marker_options = [r for r in marker_supported]
 
-        # 切換股票時 → 重置 multiselect，重新依新股的命中狀態 default
+        # 切換股票時 → 重置 multiselect
         if st.session_state.get("_marker_last_stock") != selected:
             st.session_state.pop("marker_select", None)
             st.session_state["_marker_last_stock"] = selected
 
         chosen_markers = st.multiselect(
-            "🎯 在圖上標記訊號（依當前個股命中狀態自動勾選）",
+            "🎯 在圖上標記訊號（手動勾選；先空白以避免首次載入縮圖問題）",
             options=marker_options,
-            default=today_hit_with_marker,
+            default=[],
             format_func=lambda r: f"{rule_zh(r)}（{rule_summary(r)}）",
-            help="預設勾選此股今日命中的規則；切換股票會自動重置；可手動加減看歷史觸發點。",
+            help=(
+                f"當前個股命中可標記規則：{', '.join(rule_zh(r) for r in today_hit_with_marker) or '無'}。"
+                "你可手動勾選想看的規則，圖上會標示過去 60 天所有觸發點。"
+            ),
             key="marker_select",
         )
 
