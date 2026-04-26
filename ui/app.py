@@ -29,7 +29,7 @@ from src.signals.labels import (
     RULE_LABELS, CATEGORY_LABELS, SCHOOL_LABELS,
     rule_zh, cat_zh, school_zh, rule_desc, rule_summary,
 )
-from src.signals.markers import find_markers, supported_rules as marker_rules, is_custom as marker_is_custom
+from src.signals.markers import find_markers, supported_rules as marker_rules
 from src.universe.utils import parse_tickers, validate_tickers, to_universe
 from src.universe import dynamic as dyn_univ
 
