@@ -610,54 +610,140 @@ with tab_detail:
             column_config={k: v for k, v in hit_col_config.items() if k in hit_cols},
         )
 
+        # ---------- Color palette ----------
+        CL = {
+            "k_up": "#d62728",      # 台股紅
+            "k_down": "#26a65b",    # 台股綠
+            "ma5": "#ff8c00",       # 橘
+            "ma20": "#2962ff",      # 藍
+            "bb_band": "#9aa0a6",   # 灰（虛線）
+            "vol_up": "#f4a8a8",    # 淡紅
+            "vol_down": "#a8d4b9",  # 淡綠
+            "vol_ma5": "#555555",
+            "kd_k": "#d62728",
+            "kd_d": "#2962ff",
+            "kd_oversold": "#aaaaaa",
+            "macd_dif": "#2962ff",
+            "macd_sig": "#ff8c00",
+            "macd_up": "#d62728",
+            "macd_down": "#26a65b",
+            "grid": "#eef0f3",
+        }
+
         fig = make_subplots(
             rows=4, cols=1, shared_xaxes=True,
-            row_heights=[0.45, 0.18, 0.18, 0.19],
-            vertical_spacing=0.04,
+            row_heights=[0.50, 0.16, 0.17, 0.17],
+            vertical_spacing=0.03,
             subplot_titles=("K 線 + 均線 + 布林通道", "成交量",
                             "KD（台股 9-3-3）", "MACD"),
         )
 
-        fig.add_trace(go.Candlestick(x=df.index, open=df["open"], high=df["high"],
-                                     low=df["low"], close=df["close"], name="K 線",
-                                     increasing_line_color="red",
-                                     decreasing_line_color="green"),
-                      row=1, col=1)
-        fig.add_trace(go.Scatter(x=df.index, y=sma(df["close"], ind_p["ma"]["short"]),
-                                 name=f"MA{ind_p['ma']['short']}",
-                                 line=dict(width=1)), row=1, col=1)
-        fig.add_trace(go.Scatter(x=df.index, y=sma(df["close"], ind_p["ma"]["mid"]),
-                                 name=f"MA{ind_p['ma']['mid']}",
-                                 line=dict(width=1)), row=1, col=1)
+        # ---- Row 1: 布林（最底）、均線、K 線（最上）----
         b = bbands(df["close"], ind_p["bbands"]["period"], ind_p["bbands"]["std"])
         fig.add_trace(go.Scatter(x=df.index, y=b["upper"], name="布林上軌",
-                                 line=dict(dash="dot", width=1)), row=1, col=1)
+                                 line=dict(dash="dot", width=1, color=CL["bb_band"]),
+                                 hovertemplate="布林上軌 %{y:.2f}<extra></extra>"),
+                      row=1, col=1)
         fig.add_trace(go.Scatter(x=df.index, y=b["lower"], name="布林下軌",
-                                 line=dict(dash="dot", width=1)), row=1, col=1)
+                                 line=dict(dash="dot", width=1, color=CL["bb_band"]),
+                                 fill="tonexty", fillcolor="rgba(154,160,166,0.06)",
+                                 hovertemplate="布林下軌 %{y:.2f}<extra></extra>"),
+                      row=1, col=1)
+        ma5_series = sma(df["close"], ind_p["ma"]["short"])
+        ma20_series = sma(df["close"], ind_p["ma"]["mid"])
+        fig.add_trace(go.Scatter(x=df.index, y=ma5_series,
+                                 name=f"MA{ind_p['ma']['short']}",
+                                 line=dict(width=1.4, color=CL["ma5"]),
+                                 hovertemplate=f"MA{ind_p['ma']['short']} %{{y:.2f}}<extra></extra>"),
+                      row=1, col=1)
+        fig.add_trace(go.Scatter(x=df.index, y=ma20_series,
+                                 name=f"MA{ind_p['ma']['mid']}",
+                                 line=dict(width=1.4, color=CL["ma20"]),
+                                 hovertemplate=f"MA{ind_p['ma']['mid']} %{{y:.2f}}<extra></extra>"),
+                      row=1, col=1)
+        fig.add_trace(go.Candlestick(x=df.index, open=df["open"], high=df["high"],
+                                     low=df["low"], close=df["close"], name="K 線",
+                                     increasing_line_color=CL["k_up"],
+                                     increasing_fillcolor=CL["k_up"],
+                                     decreasing_line_color=CL["k_down"],
+                                     decreasing_fillcolor=CL["k_down"],
+                                     line=dict(width=1)),
+                      row=1, col=1)
 
-        colors = ["red" if c >= o else "green" for c, o in zip(df["close"], df["open"])]
+        # ---- Row 2: Volume ----
+        vol_colors = [CL["vol_up"] if c >= o else CL["vol_down"]
+                      for c, o in zip(df["close"], df["open"])]
         fig.add_trace(go.Bar(x=df.index, y=df["volume"], name="成交量",
-                             marker_color=colors), row=2, col=1)
+                             marker_color=vol_colors,
+                             marker_line_width=0,
+                             hovertemplate="成交量 %{y:,.0f}<extra></extra>"),
+                      row=2, col=1)
+        vol_ma5 = df["volume"].rolling(5, min_periods=5).mean()
+        fig.add_trace(go.Scatter(x=df.index, y=vol_ma5, name="量 MA5",
+                                 line=dict(width=1, color=CL["vol_ma5"], dash="dash"),
+                                 hovertemplate="量 MA5 %{y:,.0f}<extra></extra>"),
+                      row=2, col=1)
 
+        # ---- Row 3: KD ----
         kd = kd_taiwan(df["high"], df["low"], df["close"], ind_p["kd"]["k_period"])
-        fig.add_trace(go.Scatter(x=df.index, y=kd["k"], name="K 值"), row=3, col=1)
-        fig.add_trace(go.Scatter(x=df.index, y=kd["d"], name="D 值"), row=3, col=1)
+        fig.add_trace(go.Scatter(x=df.index, y=kd["k"], name="K 值",
+                                 line=dict(width=1.5, color=CL["kd_k"]),
+                                 hovertemplate="K %{y:.1f}<extra></extra>"),
+                      row=3, col=1)
+        fig.add_trace(go.Scatter(x=df.index, y=kd["d"], name="D 值",
+                                 line=dict(width=1.5, color=CL["kd_d"]),
+                                 hovertemplate="D %{y:.1f}<extra></extra>"),
+                      row=3, col=1)
         fig.add_hline(y=ind_p["kd"]["oversold"], line_dash="dash",
-                      line_color="gray", row=3, col=1)
+                      line_color=CL["kd_oversold"], line_width=1, row=3, col=1)
+        fig.add_hline(y=80, line_dash="dash",
+                      line_color=CL["kd_oversold"], line_width=1, row=3, col=1)
 
+        # ---- Row 4: MACD ----
         m = macd(df["close"], ind_p["macd"]["fast"], ind_p["macd"]["slow"],
                  ind_p["macd"]["signal"])
-        hist_colors = ["red" if h >= 0 else "green" for h in m["hist"].fillna(0)]
+        hist_colors = [CL["macd_up"] if h >= 0 else CL["macd_down"]
+                       for h in m["hist"].fillna(0)]
         fig.add_trace(go.Bar(x=df.index, y=m["hist"], name="MACD 柱",
-                             marker_color=hist_colors), row=4, col=1)
-        fig.add_trace(go.Scatter(x=df.index, y=m["macd"], name="DIF"), row=4, col=1)
-        fig.add_trace(go.Scatter(x=df.index, y=m["signal"], name="MACD"), row=4, col=1)
+                             marker_color=hist_colors, marker_line_width=0,
+                             hovertemplate="柱 %{y:.3f}<extra></extra>"),
+                      row=4, col=1)
+        fig.add_trace(go.Scatter(x=df.index, y=m["macd"], name="DIF",
+                                 line=dict(width=1.4, color=CL["macd_dif"]),
+                                 hovertemplate="DIF %{y:.3f}<extra></extra>"),
+                      row=4, col=1)
+        fig.add_trace(go.Scatter(x=df.index, y=m["signal"], name="MACD",
+                                 line=dict(width=1.4, color=CL["macd_sig"]),
+                                 hovertemplate="MACD %{y:.3f}<extra></extra>"),
+                      row=4, col=1)
 
-        fig.update_layout(height=600, xaxis_rangeslider_visible=False,
-                          showlegend=True,
-                          legend=dict(orientation="h", yanchor="bottom", y=1.02,
-                                      xanchor="right", x=1, font=dict(size=10)),
-                          margin=dict(l=10, r=10, t=50, b=10))
+        # ---- Layout ----
+        fig.update_layout(
+            height=720,
+            xaxis_rangeslider_visible=False,
+            showlegend=True,
+            hovermode="x unified",
+            legend=dict(orientation="h", yanchor="bottom", y=1.04,
+                        xanchor="right", x=1, font=dict(size=11),
+                        bgcolor="rgba(255,255,255,0.7)"),
+            margin=dict(l=10, r=10, t=50, b=10),
+            plot_bgcolor="white",
+            paper_bgcolor="white",
+            font=dict(size=11),
+        )
+        # Smaller subplot titles
+        for ann in fig["layout"]["annotations"]:
+            ann["font"] = dict(size=12, color="#333")
+            ann["x"] = 0.0
+            ann["xanchor"] = "left"
+        # Grid styling
+        fig.update_xaxes(showgrid=True, gridcolor=CL["grid"], gridwidth=1,
+                         showspikes=True, spikecolor="#aaa",
+                         spikethickness=1, spikedash="dot", spikemode="across")
+        fig.update_yaxes(showgrid=True, gridcolor=CL["grid"], gridwidth=1)
+        # Hide weekend gaps for daily K
+        fig.update_xaxes(rangebreaks=[dict(bounds=["sat", "mon"])])
+
         st.plotly_chart(fig, width="stretch")
 
 # ---------- Tab 3: Help ----------
