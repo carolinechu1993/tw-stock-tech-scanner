@@ -914,105 +914,97 @@ with tab_detail:
         # Hide weekend gaps for daily K
         fig.update_xaxes(rangebreaks=[dict(bounds=["sat", "mon"])])
 
-        # 直接 embed 並 inject JS：監聽 plotly_hover，用 paper-coordinate shape
-        # 強制畫一條跨整張圖（含所有子圖）的垂直線
+        # 用 fig.to_json() 取出純資料，由 JS 在 iframe 父容器有寬度後再 newPlot
+        # 這樣 plotly 一開始就以正確尺寸畫，避免 0 寬度初始化的問題
         plot_id = f"chart-{selected.replace('.', '-')}"
-        chart_html = pio.to_html(
-            fig,
-            include_plotlyjs="cdn",
-            full_html=False,
-            div_id=plot_id,
-            default_width="100%",
-            default_height="720px",
-            config={
-                "displayModeBar": True,
-                "displaylogo": False,
-                "modeBarButtonsToRemove": ["lasso2d", "select2d"],
-                "scrollZoom": True,
-                "responsive": True,
-            },
-        )
+        fig_json = fig.to_json()
+        plotly_config = {
+            "displayModeBar": True,
+            "displaylogo": False,
+            "modeBarButtonsToRemove": ["lasso2d", "select2d"],
+            "scrollZoom": True,
+            "responsive": True,
+        }
+        import json as _json
+        config_json = _json.dumps(plotly_config)
 
-        # 注入 hover crosshair + 強制 resize（iframe 內 plotly 預設寬度抓不準）
-        custom_js = f"""
+        full_html = f"""
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
 <style>
-  body, html {{ margin: 0; padding: 0; width: 100%; height: 100%; }}
-  #{plot_id} {{ width: 100% !important; height: 100% !important; }}
-  .plotly-graph-div {{ width: 100% !important; }}
-  .js-plotly-plot {{ width: 100% !important; }}
+  html, body {{ margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; }}
+  #{plot_id} {{ width: 100%; height: 100%; }}
 </style>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+</head>
+<body>
+<div id="{plot_id}"></div>
+<script id="fig-data" type="application/json">{fig_json}</script>
 <script>
 (function() {{
-    function applyExplicitWidth() {{
-        var gd = document.getElementById("{plot_id}");
-        if (!gd) return false;
-        var parent = gd.parentElement || document.body;
-        var w = parent.clientWidth || window.innerWidth || 0;
-        if (w < 100) return false;  // 父容器尚未量好
-        try {{
-            // 明確指定寬度強制 plotly 重新計算 layout
-            Plotly.relayout(gd, {{ width: w, autosize: false }});
-            // 短暫延遲後恢復 autosize，方便後續 resize 自動 work
-            setTimeout(function() {{
-                try {{ Plotly.relayout(gd, {{ autosize: true, width: null }}); }} catch(e) {{}}
-                try {{ Plotly.Plots.resize(gd); }} catch(e) {{}}
-            }}, 100);
-            return true;
-        }} catch(e) {{ return false; }}
-    }}
+    var gd = document.getElementById("{plot_id}");
+    var figData = JSON.parse(document.getElementById("fig-data").textContent);
+    var config = {config_json};
+    var rendered = false;
+    var baseShapes = [];
 
-    function init() {{
-        var gd = document.getElementById("{plot_id}");
-        if (!gd || !gd.on) {{ setTimeout(init, 50); return; }}
-
-        // 第一階段：等到父容器有寬度時，明確 relayout 強制重畫
-        var success = false;
-        var fixAttempts = 0;
-        var fixInterval = setInterval(function() {{
-            if (applyExplicitWidth()) {{
-                success = true;
-                clearInterval(fixInterval);
-            }}
-            fixAttempts++;
-            if (fixAttempts > 80) clearInterval(fixInterval);  // 8 秒上限
-        }}, 100);
-
-        // 第二階段：監聽尺寸變化 + window 事件
-        if (typeof ResizeObserver !== "undefined") {{
-            var ro = new ResizeObserver(function() {{
-                try {{ Plotly.Plots.resize(gd); }} catch(e) {{}}
-            }});
-            ro.observe(document.body);
-            if (gd.parentElement) ro.observe(gd.parentElement);
-            ro.observe(gd);
-        }}
-        window.addEventListener("resize", function() {{
-            try {{ Plotly.Plots.resize(gd); }} catch(e) {{}}
-        }});
-
-        // Hover crosshair：paper-y shape 跨所有子圖
-        var baseShapes = (gd.layout && gd.layout.shapes)
+    function setupHoverCrosshair() {{
+        baseShapes = (gd.layout && gd.layout.shapes)
             ? JSON.parse(JSON.stringify(gd.layout.shapes)) : [];
         gd.on("plotly_hover", function(data) {{
             if (!data.points || !data.points.length) return;
             var x = data.points[0].x;
-            var hoverLine = {{
+            Plotly.relayout(gd, {{ shapes: baseShapes.concat([{{
                 type: "line", xref: "x", yref: "paper",
                 x0: x, x1: x, y0: 0, y1: 1,
                 line: {{ color: "#1f3a5f", width: 1.5 }},
                 opacity: 0.85
-            }};
-            Plotly.relayout(gd, {{ shapes: baseShapes.concat([hoverLine]) }});
+            }}]) }});
         }});
         gd.on("plotly_unhover", function() {{
             Plotly.relayout(gd, {{ shapes: baseShapes }});
         }});
     }}
-    init();
+
+    function tryRender() {{
+        if (rendered) return;
+        var w = gd.clientWidth;
+        if (w < 100) {{
+            // 父容器還沒量好，等一下再試
+            setTimeout(tryRender, 50);
+            return;
+        }}
+        // 父容器尺寸已知 → 第一次也是唯一一次 newPlot
+        Plotly.newPlot(gd, figData.data, figData.layout, config).then(function() {{
+            rendered = true;
+            setupHoverCrosshair();
+        }});
+    }}
+
+    // 監聽後續 resize 事件
+    window.addEventListener("resize", function() {{
+        if (rendered) {{
+            try {{ Plotly.Plots.resize(gd); }} catch(e) {{}}
+        }}
+    }});
+    if (typeof ResizeObserver !== "undefined") {{
+        var ro = new ResizeObserver(function() {{
+            if (rendered) {{
+                try {{ Plotly.Plots.resize(gd); }} catch(e) {{}}
+            }}
+        }});
+        ro.observe(document.body);
+    }}
+
+    tryRender();
 }})();
 </script>
+</body>
+</html>
 """
-        components.html(chart_html + custom_js, height=780, scrolling=False)
+        components.html(full_html, height=780, scrolling=False)
         st.caption("💡 滑鼠移到圖上 → 一條藍色實線貫穿 K / 量 / KD / MACD 四個子圖")
 
 # ---------- Tab 3: Help ----------
