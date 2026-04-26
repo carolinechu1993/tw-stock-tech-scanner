@@ -885,11 +885,94 @@ with tab_detail:
         fig.update_yaxes(showgrid=True, gridcolor=CL["grid"], gridwidth=1)
         # Hide weekend gaps for daily K
         fig.update_xaxes(rangebreaks=[dict(bounds=["sat", "mon"])])
-        # Note: Plotly's per-axis spike won't cross subplots; we rely on
-        # hovermode='x unified' (already set in update_layout) which draws
-        # a single vertical line spanning all subplots in a shared-x figure.
 
-        st.plotly_chart(fig, width="stretch")
+        # ---- Click-to-lock crosshair ----
+        # 點擊圖上任一位置 → 鎖定該日期 → 用 add_vline 畫貫穿所有子圖的實線
+        locked_key = f"locked_date_{selected}"
+        locked_date = st.session_state.get(locked_key)
+
+        if locked_date is not None:
+            try:
+                fig.add_vline(
+                    x=pd.to_datetime(locked_date),
+                    line_color="#1f3a5f",
+                    line_width=2,
+                    line_dash="solid",
+                    annotation_text=f"📍 {pd.to_datetime(locked_date).strftime('%Y-%m-%d')}",
+                    annotation_position="top",
+                    annotation_font=dict(size=12, color="#1f3a5f"),
+                )
+            except Exception:
+                pass
+
+        chart_event = st.plotly_chart(
+            fig,
+            width="stretch",
+            on_select="rerun",
+            selection_mode="points",
+            key=f"chart_{selected}",
+        )
+
+        # 處理點擊事件
+        new_clicked_x = None
+        try:
+            sel = getattr(chart_event, "selection", None) or chart_event.get("selection")
+            pts = sel.get("points") if isinstance(sel, dict) else getattr(sel, "points", None)
+            if pts:
+                p0 = pts[0]
+                new_clicked_x = p0.get("x") if isinstance(p0, dict) else getattr(p0, "x", None)
+        except Exception:
+            pass
+
+        if new_clicked_x and str(new_clicked_x) != str(locked_date):
+            st.session_state[locked_key] = new_clicked_x
+            st.rerun()
+
+        # ---- 鎖定日詳細數值卡片 ----
+        if locked_date:
+            try:
+                locked_dt = pd.to_datetime(locked_date).normalize()
+                if locked_dt in df.index:
+                    row = df.loc[locked_dt]
+                    ma5_v = ma5_series.get(locked_dt, float("nan"))
+                    ma20_v = ma20_series.get(locked_dt, float("nan"))
+                    bb_u = b["upper"].get(locked_dt, float("nan"))
+                    bb_l = b["lower"].get(locked_dt, float("nan"))
+                    vol_ma_v = vol_ma5.get(locked_dt, float("nan"))
+                    k_v = kd["k"].get(locked_dt, float("nan"))
+                    d_v = kd["d"].get(locked_dt, float("nan"))
+                    macd_dif = m["macd"].get(locked_dt, float("nan"))
+                    macd_sig = m["signal"].get(locked_dt, float("nan"))
+                    macd_h = m["hist"].get(locked_dt, float("nan"))
+
+                    c1, c2 = st.columns([5, 1])
+                    c1.markdown(
+                        f"### 📍 {locked_dt.strftime('%Y-%m-%d')} ({locked_dt.strftime('%a')}) "
+                        f"指標讀值"
+                    )
+                    if c2.button("清除標記", key=f"clear_lock_{selected}"):
+                        del st.session_state[locked_key]
+                        st.rerun()
+
+                    col1, col2, col3, col4 = st.columns(4)
+                    col1.metric("收盤", f"{row['close']:.2f}",
+                                f"{(row['close'] - row['open']):+.2f}")
+                    col1.caption(f"開 {row['open']:.2f} | 高 {row['high']:.2f} | 低 {row['low']:.2f}")
+                    col2.metric(f"MA{ind_p['ma']['short']}", f"{ma5_v:.2f}",
+                                f"{(row['close'] - ma5_v):+.2f}" if not pd.isna(ma5_v) else "—")
+                    col2.caption(f"MA{ind_p['ma']['mid']}: {ma20_v:.2f}")
+                    col3.metric("KD", f"K={k_v:.1f}",
+                                f"D={d_v:.1f}" if not pd.isna(d_v) else "—")
+                    col3.caption(f"成交量 {row['volume']:,.0f}")
+                    col4.metric("MACD 柱", f"{macd_h:+.3f}",
+                                "翻紅" if macd_h > 0 else "翻綠")
+                    col4.caption(f"DIF {macd_dif:.3f} | MACD {macd_sig:.3f}")
+                else:
+                    st.warning(f"鎖定日期 {locked_dt.date()} 不在資料範圍內")
+            except Exception as e:
+                st.warning(f"無法顯示該日數值：{e}")
+        else:
+            st.caption("💡 提示：**點擊圖表上任一資料點** → 鎖定該日期，圖上會畫垂直線、下方顯示精確指標數值")
 
 # ---------- Tab 3: Help ----------
 
