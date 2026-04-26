@@ -263,7 +263,8 @@ with st.sidebar:
             n = len(preview) if preview else 0
             st.caption(f"共 {n} 檔")
             if n > 200:
-                st.caption(f"⏱ 大池子（{n} 檔），首次掃描需 1-3 分鐘")
+                est_min = max(1, ((n + 49) // 50) * 4 // 60)
+                st.caption(f"⏱ 首次掃描 ~{est_min} 分鐘（之後有快取秒回）")
         except Exception:
             st.caption("（計算中…）")
     else:
@@ -410,10 +411,17 @@ universe_tuple = tuple((d["symbol"], d.get("name", d["symbol"])) for d in univer
 
 force_now = st.session_state.force_counter > 0
 n_total = len(universe_tuple)
+# Empirical: ~3.5s per batch of 50 (yfinance download + 1s sleep + indicator calc)
+# Cache hits are near-instant so this is worst-case estimate
+batches = (n_total + 49) // 50
+est_sec = max(2, batches * 4)
+if est_sec < 60:
+    eta = f"~{est_sec} 秒"
+else:
+    minutes = est_sec / 60
+    eta = f"~{minutes:.1f} 分鐘" if minutes < 3 else f"~{int(minutes)} 分鐘"
 spinner_msg = (
-    f"抓取資料並計算指標中（{n_total} 檔）…"
-    if n_total <= 50
-    else f"抓取資料並計算指標中（{n_total} 檔，分批避免被擋，預計 {max(1, n_total // 50)} 分鐘）…"
+    f"抓取資料並計算指標中（{n_total} 檔，{eta}；有快取則秒回）…"
 )
 with st.spinner(spinner_msg):
     ranking, details, scan_ts = run_scan(
