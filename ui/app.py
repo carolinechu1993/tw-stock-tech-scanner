@@ -757,11 +757,62 @@ with tab_detail:
                                  showlegend=False),
                       row=4, col=1)
 
-        # ---- Rule markers ----
+        # ---- Rule markers (config-driven for 18 of 19; double_bottom is special) ----
         marker_params = cfg_static["indicators"]
-        marker_params["volume"] = cfg_static["indicators"]["volume"]  # ensure key
-        marker_params["kd"] = cfg_static["indicators"]["kd"]
-        marker_params["ma"] = cfg_static["indicators"]["ma"]
+
+        # 每條規則的 marker 樣式 + 子圖位置 + y 計算方式
+        # y 種類：low_below(K下) high_above(K上) vol_above(量上) ma20(月線值)
+        #        macd_hist(MACD柱值) kd_k(K值) body_mid(K棒中點)
+        MARKER_CFG = {
+            # 趨勢類（多在 K 線子圖）
+            "ma_golden_cross":         dict(row=1, sym="triangle-up", c="#ff8c00", b="#cc7000", t="金叉",       y="low_below",  s=14),
+            "ma_bullish_alignment":    dict(row=1, sym="triangle-up", c="#2e7d32", b="#1b5e20", t=None,         y="low_below",  s=10),
+            "ma_converge_breakout":    dict(row=1, sym="star",        c="#fbc02d", b="#f57f17", t="突破糾結",   y="high_above", s=13),
+            "pullback_holds_ma20":     dict(row=1, sym="circle-open", c="#1565c0", b="#0d3d8a", t=None,         y="ma20",       s=10),
+            "macd_hist_turn_positive": dict(row=4, sym="triangle-up", c="#d32f2f", b="#9a0007", t=None,         y="macd_hist",  s=10),
+            "adx_strong_uptrend":      dict(row=1, sym="diamond",     c="#1b5e20", b="#003300", t=None,         y="low_below",  s=8),
+            # 動能類
+            "kd_oversold_golden":      dict(row=3, sym="triangle-up", c="#26a65b", b="#1e7d44", t=None,         y="kd_k",       s=12),
+            "rsi_recover":             dict(row=3, sym="triangle-up", c="#66bb6a", b="#2e7d32", t=None,         y="kd_mid",     s=10),
+            # 量價類
+            "volume_breakout":         dict(row=2, sym="star",        c="#ffb300", b="#cc7a00", t=None,         y="vol_above",  s=12),
+            "price_volume_surge":      dict(row=2, sym="triangle-up", c="#ffd54f", b="#f9a825", t=None,         y="vol_above",  s=10),
+            "obv_new_high":            dict(row=1, sym="diamond",     c="#8d6e63", b="#5d4037", t=None,         y="low_below",  s=9),
+            "volume_dry_red_surge":    dict(row=2, sym="star",        c="#ef6c00", b="#d04000", t="縮量轉攻",   y="vol_above",  s=12),
+            # 波動類
+            "bbands_lower_bounce":     dict(row=1, sym="star",        c="#00acc1", b="#00838f", t=None,         y="low_below",  s=11),
+            "bbands_upper_break":      dict(row=1, sym="star",        c="#9c27b0", b="#6a1b9a", t=None,         y="high_above", s=13),
+            "atr_expansion":           dict(row=1, sym="x",           c="#757575", b="#424242", t=None,         y="high_above", s=10),
+            # 型態類
+            "long_red_breakout":       dict(row=1, sym="triangle-up", c="#c62828", b="#8e0000", t="長紅",       y="high_above", s=12),
+            "long_lower_shadow":       dict(row=1, sym="arrow-up",    c="#1565c0", b="#0d3d8a", t="止跌",       y="low_below",  s=14),
+            "doji_or_spinning_top":    dict(row=1, sym="diamond",     c="#6a1b9a", b="#4a148c", t=None,         y="body_mid",   s=10),
+        }
+
+        def _y_for(date, kind):
+            try:
+                if kind == "low_below":
+                    return float(df.at[date, "low"]) * 0.985
+                if kind == "high_above":
+                    return float(df.at[date, "high"]) * 1.012
+                if kind == "vol_above":
+                    return float(df.at[date, "volume"]) * 1.05
+                if kind == "ma20":
+                    v = ma20_series.get(date, float("nan"))
+                    return float(v) if not pd.isna(v) else float(df.at[date, "close"])
+                if kind == "macd_hist":
+                    v = m["hist"].get(date, float("nan"))
+                    return float(v) if not pd.isna(v) else 0.0
+                if kind == "kd_k":
+                    v = kd["k"].get(date, float("nan"))
+                    return float(v) if not pd.isna(v) else 50.0
+                if kind == "kd_mid":
+                    return 50.0
+                if kind == "body_mid":
+                    return (float(df.at[date, "open"]) + float(df.at[date, "close"])) / 2
+            except Exception:
+                pass
+            return float(df.at[date, "close"]) if date in df.index else 0.0
 
         for rule_id in chosen_markers:
             occurrences = find_markers(rule_id, df, marker_params)
@@ -769,81 +820,8 @@ with tab_detail:
                 continue
             label = rule_zh(rule_id)
 
-            if rule_id == "ma_golden_cross":
-                # 紅 K 圖下方畫 ↑ 三角
-                xs = [o["date"] for o in occurrences]
-                ys = [o["price"] * 0.985 for o in occurrences]  # 略低於最低
-                fig.add_trace(go.Scatter(
-                    x=xs, y=ys, name=label,
-                    mode="markers+text",
-                    marker=dict(symbol="triangle-up", size=14,
-                                color="#ff8c00",
-                                line=dict(width=1.5, color="#cc7000")),
-                    text=["金叉"] * len(xs),
-                    textposition="bottom center",
-                    textfont=dict(size=10, color="#cc7000"),
-                    hovertemplate=f"{label}<br>%{{x|%Y-%m-%d}}<extra></extra>",
-                ), row=1, col=1)
-
-            elif rule_id == "volume_breakout":
-                # 量子圖那根改色（畫 marker 在量上方）
-                xs = [o["date"] for o in occurrences]
-                ys = [o["volume"] * 1.05 for o in occurrences]
-                fig.add_trace(go.Scatter(
-                    x=xs, y=ys, name=label,
-                    mode="markers",
-                    marker=dict(symbol="star", size=12,
-                                color="#ffb300",
-                                line=dict(width=1.2, color="#cc7a00")),
-                    hovertemplate=(f"{label}<br>%{{x|%Y-%m-%d}}<br>"
-                                   "量 %{customdata:.1f}× 5MA<extra></extra>"),
-                    customdata=[o["ratio"] for o in occurrences],
-                ), row=2, col=1)
-
-            elif rule_id == "kd_oversold_golden":
-                # KD 子圖加綠色三角
-                xs = [o["date"] for o in occurrences]
-                ys = [o["k"] for o in occurrences]
-                fig.add_trace(go.Scatter(
-                    x=xs, y=ys, name=label,
-                    mode="markers",
-                    marker=dict(symbol="triangle-up", size=12,
-                                color="#26a65b",
-                                line=dict(width=1.2, color="#1e7d44")),
-                    hovertemplate=f"{label}<br>%{{x|%Y-%m-%d}}<br>K=%{{y:.1f}}<extra></extra>",
-                ), row=3, col=1)
-
-            elif rule_id == "bbands_upper_break":
-                # K 線那根上方畫 ★
-                xs = [o["date"] for o in occurrences]
-                ys = [o["price"] * 1.012 for o in occurrences]  # 略高於 high
-                fig.add_trace(go.Scatter(
-                    x=xs, y=ys, name=label,
-                    mode="markers",
-                    marker=dict(symbol="star", size=13,
-                                color="#9c27b0",
-                                line=dict(width=1.2, color="#6a1b9a")),
-                    hovertemplate=f"{label}<br>%{{x|%Y-%m-%d}}<extra></extra>",
-                ), row=1, col=1)
-
-            elif rule_id == "long_lower_shadow":
-                # K 線下方畫 ⤴ 朝上箭頭
-                xs = [o["date"] for o in occurrences]
-                ys = [o["price"] * 0.985 for o in occurrences]
-                fig.add_trace(go.Scatter(
-                    x=xs, y=ys, name=label,
-                    mode="markers+text",
-                    marker=dict(symbol="arrow-up", size=14,
-                                color="#1565c0",
-                                line=dict(width=1.2, color="#0d3d8a")),
-                    text=["止跌"] * len(xs),
-                    textposition="bottom center",
-                    textfont=dict(size=10, color="#1565c0"),
-                    hovertemplate=f"{label}<br>%{{x|%Y-%m-%d}}<extra></extra>",
-                ), row=1, col=1)
-
-            elif rule_id == "double_bottom":
-                # 兩個低點畫圓圈，並用虛線連起
+            # 雙底：特殊樣式（兩個低點 + 虛線連線）
+            if rule_id == "double_bottom":
                 for occ in occurrences:
                     fig.add_trace(go.Scatter(
                         x=[occ["first_date"], occ["second_date"]],
@@ -860,23 +838,33 @@ with tab_detail:
                         hovertemplate=f"{label}<extra></extra>",
                         showlegend=True,
                     ), row=1, col=1)
+                continue
 
-            else:
-                # 通用 marker（13 條沒客製樣式的規則）：K 線下方小圓點
-                xs = [o["date"] for o in occurrences]
-                ys = [o["price"] * 0.985 for o in occurrences]
-                # 用規則 hash 決定顏色（讓不同規則有不同色）
-                palette = ["#5e35b1", "#039be5", "#43a047", "#fb8c00",
-                           "#8e24aa", "#00838f", "#6d4c41", "#546e7a"]
-                color = palette[hash(rule_id) % len(palette)]
-                fig.add_trace(go.Scatter(
-                    x=xs, y=ys, name=label,
-                    mode="markers",
-                    marker=dict(symbol="circle", size=8,
-                                color=color,
-                                line=dict(width=1, color="#222")),
-                    hovertemplate=f"{label}<br>%{{x|%Y-%m-%d}}<extra></extra>",
-                ), row=1, col=1)
+            # 其餘 18 條走 config 表
+            cfg_m = MARKER_CFG.get(rule_id)
+            if not cfg_m:
+                continue
+
+            xs = [o["date"] for o in occurrences]
+            ys = [_y_for(o["date"], cfg_m["y"]) for o in occurrences]
+            mode = "markers+text" if cfg_m.get("t") else "markers"
+            text = [cfg_m["t"]] * len(xs) if cfg_m.get("t") else None
+            text_pos = "bottom center" if cfg_m["y"] in ("low_below",) else "top center"
+
+            fig.add_trace(go.Scatter(
+                x=xs, y=ys, name=label,
+                mode=mode,
+                marker=dict(
+                    symbol=cfg_m["sym"],
+                    size=cfg_m.get("s", 11),
+                    color=cfg_m["c"],
+                    line=dict(width=1.2, color=cfg_m["b"]),
+                ),
+                text=text,
+                textposition=text_pos,
+                textfont=dict(size=10, color=cfg_m["b"]),
+                hovertemplate=f"{label}<br>%{{x|%Y-%m-%d}}<extra></extra>",
+            ), row=cfg_m["row"], col=1)
 
         # ---- Layout ----
         fig.update_layout(
