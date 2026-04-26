@@ -583,19 +583,29 @@ with tab_rank:
         "分類分布": st.column_config.TextColumn("分類分布", width="medium"),
         "錯誤": st.column_config.TextColumn("錯誤", width="medium"),
     }
+    # 用 universe_key 當 data_editor key 後綴 → 切 universe 時 editor 整個重置
+    # 避免 Streamlit 把舊 universe 的 ⭐ 內部狀態套到新 universe 的 row 上
+    editor_key = f"ranking_editor__{universe_key}"
     edited = st.data_editor(
         edit_df[rank_cols],
         width="stretch",
         hide_index=True,
         column_config={k: v for k, v in rank_col_config.items() if k in rank_cols},
         disabled=[c for c in rank_cols if c != "⭐"],
-        key="ranking_editor",
+        key=editor_key,
     )
 
-    # Sync watchlist with checkbox state
+    # 只在使用者真的有點 ⭐ 時才同步觀察清單。
+    # 比對 input edit_df 的 ⭐ 跟 edited 的 ⭐ 是否相同 — 一致代表沒按過、不同步
+    input_stars = edit_df["⭐"].astype(bool).tolist()
+    edited_stars = edited["⭐"].astype(bool).tolist()
+    user_clicked = (
+        len(input_stars) == len(edited_stars)
+        and any(a != b for a, b in zip(input_stars, edited_stars))
+    )
     new_starred = set(edited.loc[edited["⭐"], "代號"].astype(str))
     old_starred = existing_syms
-    if new_starred != old_starred:
+    if user_clicked and new_starred != old_starred:
         # Preserve order: keep existing watchlist items that are still starred
         current_wl = list(st.session_state.get("watchlist", []))
         kept = [item for item in current_wl if item["symbol"] in new_starred]
