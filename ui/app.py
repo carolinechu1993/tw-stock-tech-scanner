@@ -853,6 +853,12 @@ with tab_detail:
             xaxis_rangeslider_visible=False,
             showlegend=True,
             hovermode="x unified",
+            hoverlabel=dict(
+                bgcolor="rgba(255,255,255,0.96)",
+                bordercolor="#888",
+                font=dict(size=13, color="#222"),
+                namelength=-1,  # don't truncate trace names
+            ),
             legend=dict(
                 orientation="h",
                 yanchor="bottom", y=1.06,
@@ -875,10 +881,26 @@ with tab_detail:
             ann["x"] = 0.0
             ann["xanchor"] = "left"
         # Grid styling
-        fig.update_xaxes(showgrid=True, gridcolor=CL["grid"], gridwidth=1,
-                         showspikes=True, spikecolor="#aaa",
-                         spikethickness=1, spikedash="dot", spikemode="across")
+        fig.update_xaxes(showgrid=True, gridcolor=CL["grid"], gridwidth=1)
         fig.update_yaxes(showgrid=True, gridcolor=CL["grid"], gridwidth=1)
+        # Crosshair: vertical line spans all 4 subplots when hovering
+        fig.update_xaxes(
+            showspikes=True,
+            spikecolor="#1f3a5f",
+            spikethickness=1.5,
+            spikedash="solid",
+            spikemode="across",
+            spikesnap="cursor",
+        )
+        # Horizontal spike on each row (helps reading exact value)
+        fig.update_yaxes(
+            showspikes=True,
+            spikecolor="#1f3a5f",
+            spikethickness=1,
+            spikedash="dot",
+            spikemode="toaxis",
+            spikesnap="cursor",
+        )
         # Hide weekend gaps for daily K
         fig.update_xaxes(rangebreaks=[dict(bounds=["sat", "mon"])])
 
