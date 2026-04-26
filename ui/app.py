@@ -654,15 +654,18 @@ with tab_detail:
         )
 
         # ---- Row 1: 布林（最底）、均線、K 線（最上）----
+        # 為減少 legend 雜亂：只在 legend 顯示 MA5 / MA20，其他隱藏
         b = bbands(df["close"], ind_p["bbands"]["period"], ind_p["bbands"]["std"])
-        fig.add_trace(go.Scatter(x=df.index, y=b["upper"], name="布林上軌",
+        fig.add_trace(go.Scatter(x=df.index, y=b["upper"], name="布林通道",
                                  line=dict(dash="dot", width=1, color=CL["bb_band"]),
-                                 hovertemplate="布林上軌 %{y:.2f}<extra></extra>"),
+                                 hovertemplate="布林上軌 %{y:.2f}<extra></extra>",
+                                 legendgroup="bb", showlegend=False),
                       row=1, col=1)
-        fig.add_trace(go.Scatter(x=df.index, y=b["lower"], name="布林下軌",
+        fig.add_trace(go.Scatter(x=df.index, y=b["lower"], name="布林通道",
                                  line=dict(dash="dot", width=1, color=CL["bb_band"]),
                                  fill="tonexty", fillcolor="rgba(154,160,166,0.06)",
-                                 hovertemplate="布林下軌 %{y:.2f}<extra></extra>"),
+                                 hovertemplate="布林下軌 %{y:.2f}<extra></extra>",
+                                 legendgroup="bb", showlegend=False),
                       row=1, col=1)
         ma5_series = sma(df["close"], ind_p["ma"]["short"])
         ma20_series = sma(df["close"], ind_p["ma"]["mid"])
@@ -682,54 +685,62 @@ with tab_detail:
                                      increasing_fillcolor=CL["k_up"],
                                      decreasing_line_color=CL["k_down"],
                                      decreasing_fillcolor=CL["k_down"],
-                                     line=dict(width=1)),
+                                     line=dict(width=1),
+                                     showlegend=False),
                       row=1, col=1)
 
-        # ---- Row 2: Volume ----
+        # ---- Row 2: Volume（不進 legend，subplot title 已說明）----
         vol_colors = [CL["vol_up"] if c >= o else CL["vol_down"]
                       for c, o in zip(df["close"], df["open"])]
         fig.add_trace(go.Bar(x=df.index, y=df["volume"], name="成交量",
                              marker_color=vol_colors,
                              marker_line_width=0,
-                             hovertemplate="成交量 %{y:,.0f}<extra></extra>"),
+                             hovertemplate="成交量 %{y:,.0f}<extra></extra>",
+                             showlegend=False),
                       row=2, col=1)
         vol_ma5 = df["volume"].rolling(5, min_periods=5).mean()
         fig.add_trace(go.Scatter(x=df.index, y=vol_ma5, name="量 MA5",
                                  line=dict(width=1, color=CL["vol_ma5"], dash="dash"),
-                                 hovertemplate="量 MA5 %{y:,.0f}<extra></extra>"),
+                                 hovertemplate="量 MA5 %{y:,.0f}<extra></extra>",
+                                 showlegend=False),
                       row=2, col=1)
 
-        # ---- Row 3: KD ----
+        # ---- Row 3: KD（不進 legend）----
         kd = kd_taiwan(df["high"], df["low"], df["close"], ind_p["kd"]["k_period"])
-        fig.add_trace(go.Scatter(x=df.index, y=kd["k"], name="K 值",
+        fig.add_trace(go.Scatter(x=df.index, y=kd["k"], name="K",
                                  line=dict(width=1.5, color=CL["kd_k"]),
-                                 hovertemplate="K %{y:.1f}<extra></extra>"),
+                                 hovertemplate="K %{y:.1f}<extra></extra>",
+                                 showlegend=False),
                       row=3, col=1)
-        fig.add_trace(go.Scatter(x=df.index, y=kd["d"], name="D 值",
+        fig.add_trace(go.Scatter(x=df.index, y=kd["d"], name="D",
                                  line=dict(width=1.5, color=CL["kd_d"]),
-                                 hovertemplate="D %{y:.1f}<extra></extra>"),
+                                 hovertemplate="D %{y:.1f}<extra></extra>",
+                                 showlegend=False),
                       row=3, col=1)
         fig.add_hline(y=ind_p["kd"]["oversold"], line_dash="dash",
                       line_color=CL["kd_oversold"], line_width=1, row=3, col=1)
         fig.add_hline(y=80, line_dash="dash",
                       line_color=CL["kd_oversold"], line_width=1, row=3, col=1)
 
-        # ---- Row 4: MACD ----
+        # ---- Row 4: MACD（不進 legend）----
         m = macd(df["close"], ind_p["macd"]["fast"], ind_p["macd"]["slow"],
                  ind_p["macd"]["signal"])
         hist_colors = [CL["macd_up"] if h >= 0 else CL["macd_down"]
                        for h in m["hist"].fillna(0)]
         fig.add_trace(go.Bar(x=df.index, y=m["hist"], name="MACD 柱",
                              marker_color=hist_colors, marker_line_width=0,
-                             hovertemplate="柱 %{y:.3f}<extra></extra>"),
+                             hovertemplate="柱 %{y:.3f}<extra></extra>",
+                             showlegend=False),
                       row=4, col=1)
         fig.add_trace(go.Scatter(x=df.index, y=m["macd"], name="DIF",
                                  line=dict(width=1.4, color=CL["macd_dif"]),
-                                 hovertemplate="DIF %{y:.3f}<extra></extra>"),
+                                 hovertemplate="DIF %{y:.3f}<extra></extra>",
+                                 showlegend=False),
                       row=4, col=1)
         fig.add_trace(go.Scatter(x=df.index, y=m["signal"], name="MACD",
                                  line=dict(width=1.4, color=CL["macd_sig"]),
-                                 hovertemplate="MACD %{y:.3f}<extra></extra>"),
+                                 hovertemplate="MACD %{y:.3f}<extra></extra>",
+                                 showlegend=False),
                       row=4, col=1)
 
         # ---- Rule markers ----
@@ -749,7 +760,7 @@ with tab_detail:
                 xs = [o["date"] for o in occurrences]
                 ys = [o["price"] * 0.985 for o in occurrences]  # 略低於最低
                 fig.add_trace(go.Scatter(
-                    x=xs, y=ys, name=f"⭐ {label}",
+                    x=xs, y=ys, name=label,
                     mode="markers+text",
                     marker=dict(symbol="triangle-up", size=14,
                                 color="#ff8c00",
@@ -765,7 +776,7 @@ with tab_detail:
                 xs = [o["date"] for o in occurrences]
                 ys = [o["volume"] * 1.05 for o in occurrences]
                 fig.add_trace(go.Scatter(
-                    x=xs, y=ys, name=f"⭐ {label}",
+                    x=xs, y=ys, name=label,
                     mode="markers",
                     marker=dict(symbol="star", size=12,
                                 color="#ffb300",
@@ -780,7 +791,7 @@ with tab_detail:
                 xs = [o["date"] for o in occurrences]
                 ys = [o["k"] for o in occurrences]
                 fig.add_trace(go.Scatter(
-                    x=xs, y=ys, name=f"⭐ {label}",
+                    x=xs, y=ys, name=label,
                     mode="markers",
                     marker=dict(symbol="triangle-up", size=12,
                                 color="#26a65b",
@@ -793,7 +804,7 @@ with tab_detail:
                 xs = [o["date"] for o in occurrences]
                 ys = [o["price"] * 1.012 for o in occurrences]  # 略高於 high
                 fig.add_trace(go.Scatter(
-                    x=xs, y=ys, name=f"⭐ {label}",
+                    x=xs, y=ys, name=label,
                     mode="markers",
                     marker=dict(symbol="star", size=13,
                                 color="#9c27b0",
@@ -806,7 +817,7 @@ with tab_detail:
                 xs = [o["date"] for o in occurrences]
                 ys = [o["price"] * 0.985 for o in occurrences]
                 fig.add_trace(go.Scatter(
-                    x=xs, y=ys, name=f"⭐ {label}",
+                    x=xs, y=ys, name=label,
                     mode="markers+text",
                     marker=dict(symbol="arrow-up", size=14,
                                 color="#1565c0",
@@ -823,7 +834,7 @@ with tab_detail:
                     fig.add_trace(go.Scatter(
                         x=[occ["first_date"], occ["second_date"]],
                         y=[occ["first_price"] * 0.99, occ["second_price"] * 0.99],
-                        name=f"⭐ {label}",
+                        name=label,
                         mode="lines+markers+text",
                         marker=dict(symbol="circle", size=14,
                                     color="rgba(255,255,255,0)",
@@ -842,13 +853,21 @@ with tab_detail:
             xaxis_rangeslider_visible=False,
             showlegend=True,
             hovermode="x unified",
-            legend=dict(orientation="h", yanchor="bottom", y=1.04,
-                        xanchor="right", x=1, font=dict(size=11),
-                        bgcolor="rgba(255,255,255,0.7)"),
-            margin=dict(l=10, r=10, t=50, b=10),
+            legend=dict(
+                orientation="h",
+                yanchor="bottom", y=1.06,
+                xanchor="left", x=0,
+                font=dict(size=14),
+                bgcolor="rgba(255,255,255,0.85)",
+                itemsizing="constant",
+                itemwidth=60,
+                bordercolor="#e5e5e5",
+                borderwidth=1,
+            ),
+            margin=dict(l=10, r=10, t=80, b=10),
             plot_bgcolor="white",
             paper_bgcolor="white",
-            font=dict(size=11),
+            font=dict(size=12),
         )
         # Smaller subplot titles
         for ann in fig["layout"]["annotations"]:
