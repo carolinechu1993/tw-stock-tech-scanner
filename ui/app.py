@@ -896,20 +896,39 @@ with tab_detail:
             include_plotlyjs="cdn",
             full_html=False,
             div_id=plot_id,
+            default_width="100%",
+            default_height="720px",
             config={
                 "displayModeBar": True,
                 "displaylogo": False,
                 "modeBarButtonsToRemove": ["lasso2d", "select2d"],
                 "scrollZoom": True,
+                "responsive": True,
             },
         )
 
-        crosshair_js = f"""
+        # 注入 hover crosshair + 強制 resize（iframe 內 plotly 預設寬度抓不準）
+        custom_js = f"""
+<style>
+  body, html {{ margin: 0; padding: 0; width: 100%; }}
+  #{plot_id} {{ width: 100% !important; }}
+  .plotly-graph-div {{ width: 100% !important; }}
+</style>
 <script>
 (function() {{
+    function safeResize(gd) {{
+        try {{ Plotly.Plots.resize(gd); }} catch(e) {{}}
+    }}
     function init() {{
         var gd = document.getElementById("{plot_id}");
         if (!gd || !gd.on) {{ setTimeout(init, 100); return; }}
+
+        // 多次強制 resize（iframe 載入時序不同）
+        safeResize(gd);
+        setTimeout(function(){{ safeResize(gd); }}, 200);
+        setTimeout(function(){{ safeResize(gd); }}, 600);
+        window.addEventListener("resize", function() {{ safeResize(gd); }});
+
         var baseShapes = (gd.layout && gd.layout.shapes)
             ? JSON.parse(JSON.stringify(gd.layout.shapes)) : [];
         gd.on("plotly_hover", function(data) {{
@@ -931,7 +950,7 @@ with tab_detail:
 }})();
 </script>
 """
-        components.html(chart_html + crosshair_js, height=760, scrolling=False)
+        components.html(chart_html + custom_js, height=780, scrolling=False)
         st.caption("💡 滑鼠移到圖上 → 一條藍色實線貫穿 K / 量 / KD / MACD 四個子圖")
 
 # ---------- Tab 3: Help ----------
