@@ -136,8 +136,8 @@ def find_double_bottom(df: pd.DataFrame, p: dict) -> list[dict]:
     return out
 
 
-# Marker registry: rule_id -> finder function
-MARKER_FINDERS = {
+# 6 條有量身打造視覺的 finder
+CUSTOM_FINDERS = {
     "ma_golden_cross": find_ma_golden_cross,
     "volume_breakout": find_volume_breakout,
     "kd_oversold_golden": find_kd_oversold_golden,
@@ -147,15 +147,39 @@ MARKER_FINDERS = {
 }
 
 
+def find_generic(rule_id: str, df: pd.DataFrame, params: dict) -> list[dict]:
+    """通用版：用 rule function 在每日的 prefix window 上滾動執行，收集 hit 日期。"""
+    from .rules import RULES
+    fn = RULES.get(rule_id)
+    if fn is None:
+        return []
+    out = []
+    for i in range(30, len(df)):
+        window = df.iloc[:i + 1]
+        try:
+            r = fn(window, params)
+            if r.hit:
+                out.append({"date": df.index[i], "price": float(df["low"].iat[i])})
+        except Exception:
+            continue
+    return out
+
+
 def find_markers(rule_id: str, df: pd.DataFrame, params: dict) -> list[dict]:
-    finder = MARKER_FINDERS.get(rule_id)
-    if not finder:
-        return []
-    try:
-        return finder(df, params)
-    except Exception:
-        return []
+    finder = CUSTOM_FINDERS.get(rule_id)
+    if finder:
+        try:
+            return finder(df, params)
+        except Exception:
+            return []
+    return find_generic(rule_id, df, params)
 
 
 def supported_rules() -> list[str]:
-    return list(MARKER_FINDERS.keys())
+    """所有 rule 都支援標記（6 條客製樣式 + 13 條通用 dot）。"""
+    from .rules import RULES
+    return list(RULES.keys())
+
+
+def is_custom(rule_id: str) -> bool:
+    return rule_id in CUSTOM_FINDERS

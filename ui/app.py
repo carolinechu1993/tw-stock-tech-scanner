@@ -29,7 +29,7 @@ from src.signals.labels import (
     RULE_LABELS, CATEGORY_LABELS, SCHOOL_LABELS,
     rule_zh, cat_zh, school_zh, rule_desc, rule_summary,
 )
-from src.signals.markers import find_markers, supported_rules as marker_rules
+from src.signals.markers import find_markers, supported_rules as marker_rules, is_custom as marker_is_custom
 from src.universe.utils import parse_tickers, validate_tickers, to_universe
 from src.universe import dynamic as dyn_univ
 
@@ -855,6 +855,23 @@ with tab_detail:
                         showlegend=True,
                     ), row=1, col=1)
 
+            else:
+                # 通用 marker（13 條沒客製樣式的規則）：K 線下方小圓點
+                xs = [o["date"] for o in occurrences]
+                ys = [o["price"] * 0.985 for o in occurrences]
+                # 用規則 hash 決定顏色（讓不同規則有不同色）
+                palette = ["#5e35b1", "#039be5", "#43a047", "#fb8c00",
+                           "#8e24aa", "#00838f", "#6d4c41", "#546e7a"]
+                color = palette[hash(rule_id) % len(palette)]
+                fig.add_trace(go.Scatter(
+                    x=xs, y=ys, name=label,
+                    mode="markers",
+                    marker=dict(symbol="circle", size=8,
+                                color=color,
+                                line=dict(width=1, color="#222")),
+                    hovertemplate=f"{label}<br>%{{x|%Y-%m-%d}}<extra></extra>",
+                ), row=1, col=1)
+
         # ---- Layout ----
         fig.update_layout(
             height=720,
@@ -933,10 +950,13 @@ with tab_detail:
         var gd = document.getElementById("{plot_id}");
         if (!gd || !gd.on) {{ setTimeout(init, 50); return; }}
 
-        // 多階段重試 resize（iframe 載入時序不同）
-        [0, 50, 150, 300, 600, 1200, 2500].forEach(function(d) {{
-            setTimeout(safeResize, d);
-        }});
+        // 暴力解：前 5 秒每 100ms 強制 resize 一次
+        var rerunCount = 0;
+        var rerunInterval = setInterval(function() {{
+            safeResize();
+            rerunCount++;
+            if (rerunCount > 50) clearInterval(rerunInterval);
+        }}, 100);
 
         // ResizeObserver 監聽容器尺寸變化
         if (typeof ResizeObserver !== "undefined") {{
