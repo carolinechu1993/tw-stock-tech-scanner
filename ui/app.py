@@ -5,8 +5,6 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 TAIPEI_TZ = ZoneInfo("Asia/Taipei")
-WATCHLIST_KEY = "tw_scanner_watchlist_v1"
-CUSTOM_TEXT_KEY = "tw_scanner_custom_text_v1"
 WATCHLIST_LIMIT = 100
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -15,8 +13,6 @@ sys.path.insert(0, str(ROOT))
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
-
-from streamlit_local_storage import LocalStorage
 
 from src.scanner import load_config, scan_with_details
 from src.indicators.trend import sma, macd
@@ -39,49 +35,57 @@ def school_badge(schools):
     return " + ".join(school_zh(s) for s in schools)
 
 
-# ---------- LocalStorage helpers ----------
+# ---------- 本機檔案儲存（取代 localStorage）----------
 
-_LS = LocalStorage()
+_USER_DATA_DIR = ROOT / "cache" / "user_data"
+_USER_DATA_DIR.mkdir(parents=True, exist_ok=True)
+_WATCHLIST_FILE = _USER_DATA_DIR / "watchlist.json"
+_CUSTOM_TEXT_FILE = _USER_DATA_DIR / "custom_text.txt"
 
 
 def _init_local_storage():
-    """Sync session_state with browser localStorage.
-
-    streamlit-local-storage v0.0.20 在 LocalStorage() __init__ 時同步把整個
-    localStorage 拉進來放在 storedItems dict，之後 getItem 就是 dict 查找。
-    所以這邊只要從 _LS.storedItems 讀就好（init 已經完成同步）。
-    """
+    """Load persistent state from local files into session_state."""
     if "watchlist" not in st.session_state:
-        raw_wl = _LS.getItem(WATCHLIST_KEY)
-        try:
-            st.session_state.watchlist = json.loads(raw_wl) if raw_wl else []
-        except Exception:
+        if _WATCHLIST_FILE.exists():
+            try:
+                st.session_state.watchlist = json.loads(
+                    _WATCHLIST_FILE.read_text(encoding="utf-8")
+                ) or []
+            except Exception:
+                st.session_state.watchlist = []
+        else:
             st.session_state.watchlist = []
 
     if "custom_text" not in st.session_state:
-        raw_text = _LS.getItem(CUSTOM_TEXT_KEY)
-        st.session_state.custom_text = raw_text if raw_text else ""
+        if _CUSTOM_TEXT_FILE.exists():
+            try:
+                st.session_state.custom_text = _CUSTOM_TEXT_FILE.read_text(
+                    encoding="utf-8"
+                )
+            except Exception:
+                st.session_state.custom_text = ""
+        else:
+            st.session_state.custom_text = ""
 
 
 def save_watchlist():
-    """寫入 localStorage — setItem 用每次都不同的 key 才能真的觸發元件執行。"""
-    counter = st.session_state.get("_save_wl_counter", 0) + 1
-    st.session_state["_save_wl_counter"] = counter
-    _LS.setItem(
-        WATCHLIST_KEY,
-        json.dumps(st.session_state.watchlist),
-        key=f"set_watchlist_{counter}",
-    )
+    try:
+        _WATCHLIST_FILE.write_text(
+            json.dumps(st.session_state.watchlist, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    except Exception as e:
+        st.warning(f"觀察清單存檔失敗：{e}")
 
 
 def save_custom_text():
-    counter = st.session_state.get("_save_text_counter", 0) + 1
-    st.session_state["_save_text_counter"] = counter
-    _LS.setItem(
-        CUSTOM_TEXT_KEY,
-        st.session_state.get("custom_text", ""),
-        key=f"set_custom_text_{counter}",
-    )
+    try:
+        _CUSTOM_TEXT_FILE.write_text(
+            st.session_state.get("custom_text", ""),
+            encoding="utf-8",
+        )
+    except Exception as e:
+        st.warning(f"自訂股票存檔失敗：{e}")
 
 st.set_page_config(
     page_title="台股技術分析掃描",

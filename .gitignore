@@ -15,6 +15,9 @@ cache/
 *.parquet
 ranking_*.csv
 
+# User-specific saved data (watchlist, custom universe)
+# - already inside cache/user_data/, but explicit for clarity
+
 # Streamlit secrets (NEVER commit)
 .streamlit/secrets.toml
 
