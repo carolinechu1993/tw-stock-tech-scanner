@@ -47,37 +47,24 @@ _LS = LocalStorage()
 def _init_local_storage():
     """Sync session_state with browser localStorage.
 
-    streamlit-local-storage 的 iframe 載入是 async — 第一次呼叫 getItem 通常回 None，
-    要等元件初始化完成才會收到資料。每次 rerun 都嘗試讀，直到讀到非 None 為止。
-    每個 getItem/setItem 必須有**唯一 key**，否則多次呼叫會在同一 component slot 互相干擾。
+    streamlit-local-storage v0.0.20 在 LocalStorage() __init__ 時同步把整個
+    localStorage 拉進來放在 storedItems dict，之後 getItem 就是 dict 查找。
+    所以這邊只要從 _LS.storedItems 讀就好（init 已經完成同步）。
     """
-    # 預設值
     if "watchlist" not in st.session_state:
-        st.session_state.watchlist = []
+        raw_wl = _LS.getItem(WATCHLIST_KEY)
+        try:
+            st.session_state.watchlist = json.loads(raw_wl) if raw_wl else []
+        except Exception:
+            st.session_state.watchlist = []
+
     if "custom_text" not in st.session_state:
-        st.session_state.custom_text = ""
-
-    # 觀察清單同步：用唯一 key
-    if not st.session_state.get("_wl_synced"):
-        raw_wl = _LS.getItem(WATCHLIST_KEY, key="get_watchlist")
-        if raw_wl is not None:
-            try:
-                st.session_state.watchlist = json.loads(raw_wl) or []
-            except Exception:
-                pass
-            st.session_state._wl_synced = True
-
-    # 自訂股票文字
-    if not st.session_state.get("_text_synced"):
-        raw_text = _LS.getItem(CUSTOM_TEXT_KEY, key="get_custom_text")
-        if raw_text is not None:
-            st.session_state.custom_text = raw_text
-            st.session_state._text_synced = True
+        raw_text = _LS.getItem(CUSTOM_TEXT_KEY)
+        st.session_state.custom_text = raw_text if raw_text else ""
 
 
 def save_watchlist():
-    """寫入 localStorage — 用每次都不同的 key 確保 component 真的執行。"""
-    # 用 watchlist 內容雜湊 + 計數器當 key 後綴，避免「同 key 同 value 不重發」
+    """寫入 localStorage — setItem 用每次都不同的 key 才能真的觸發元件執行。"""
     counter = st.session_state.get("_save_wl_counter", 0) + 1
     st.session_state["_save_wl_counter"] = counter
     _LS.setItem(
