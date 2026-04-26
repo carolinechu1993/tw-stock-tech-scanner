@@ -29,3 +29,7 @@ Thumbs.db
 # Project artifacts
 review_bundle.txt
 .claude/
+
+# Vendor docs (broker/API documentation, not for distribution)
+*.docx
+*.pdf
