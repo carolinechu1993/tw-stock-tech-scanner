@@ -925,11 +925,16 @@ with tab_detail:
         import json as _json
         config_json = _json.dumps(plotly_config)
 
+        # nonce 包含 stock + 已選 markers + scan_ts → 任何相關狀態變動都會強制 iframe 重建
+        import hashlib as _hashlib
+        _nonce_seed = f"{selected}|{','.join(chosen_markers)}|{scan_ts}"
+        _nonce = _hashlib.md5(_nonce_seed.encode("utf-8")).hexdigest()[:10]
         full_html = f"""
 <!DOCTYPE html>
-<html>
+<html data-nonce="{_nonce}">
 <head>
 <meta charset="utf-8">
+<meta name="nonce" content="{_nonce}">
 <style>
   html, body {{ margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; }}
   #{plot_id} {{ width: 100%; height: 100%; }}
