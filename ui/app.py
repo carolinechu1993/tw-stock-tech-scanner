@@ -886,93 +886,77 @@ with tab_detail:
         # Hide weekend gaps for daily K
         fig.update_xaxes(rangebreaks=[dict(bounds=["sat", "mon"])])
 
-        # ---- Click-to-lock crosshair ----
-        # 點擊圖上任一位置 → 鎖定該日期 → 用 add_vline 畫貫穿所有子圖的實線
-        locked_key = f"locked_date_{selected}"
-        locked_date = st.session_state.get(locked_key)
+        # ---- 日期選擇器（鎖定垂直線 + 精確讀值）----
+        date_strs = [d.strftime("%Y-%m-%d") for d in df.index]
+        date_options = ["（不鎖定）"] + date_strs
+        sel_date_str = st.selectbox(
+            "📍 選日期 → 圖上畫貫穿線並顯示精確指標",
+            options=date_options,
+            index=0,
+            key=f"date_picker_{selected}",
+            help="選定後，圖表四個子圖會出現一條藍色實線標示該日，下方卡片顯示完整數值",
+        )
 
-        if locked_date is not None:
+        locked_dt = None
+        if sel_date_str != "（不鎖定）":
             try:
+                locked_dt = pd.to_datetime(sel_date_str)
                 fig.add_vline(
-                    x=pd.to_datetime(locked_date),
+                    x=locked_dt,
                     line_color="#1f3a5f",
                     line_width=2,
                     line_dash="solid",
-                    annotation_text=f"📍 {pd.to_datetime(locked_date).strftime('%Y-%m-%d')}",
+                    annotation_text=f"📍 {sel_date_str}",
                     annotation_position="top",
                     annotation_font=dict(size=12, color="#1f3a5f"),
                 )
             except Exception:
-                pass
+                locked_dt = None
 
-        chart_event = st.plotly_chart(
-            fig,
-            width="stretch",
-            on_select="rerun",
-            selection_mode="points",
-            key=f"chart_{selected}",
-        )
-
-        # 處理點擊事件
-        new_clicked_x = None
-        try:
-            sel = getattr(chart_event, "selection", None) or chart_event.get("selection")
-            pts = sel.get("points") if isinstance(sel, dict) else getattr(sel, "points", None)
-            if pts:
-                p0 = pts[0]
-                new_clicked_x = p0.get("x") if isinstance(p0, dict) else getattr(p0, "x", None)
-        except Exception:
-            pass
-
-        if new_clicked_x and str(new_clicked_x) != str(locked_date):
-            st.session_state[locked_key] = new_clicked_x
-            st.rerun()
+        st.plotly_chart(fig, width="stretch")
 
         # ---- 鎖定日詳細數值卡片 ----
-        if locked_date:
-            try:
-                locked_dt = pd.to_datetime(locked_date).normalize()
-                if locked_dt in df.index:
-                    row = df.loc[locked_dt]
-                    ma5_v = ma5_series.get(locked_dt, float("nan"))
-                    ma20_v = ma20_series.get(locked_dt, float("nan"))
-                    bb_u = b["upper"].get(locked_dt, float("nan"))
-                    bb_l = b["lower"].get(locked_dt, float("nan"))
-                    vol_ma_v = vol_ma5.get(locked_dt, float("nan"))
-                    k_v = kd["k"].get(locked_dt, float("nan"))
-                    d_v = kd["d"].get(locked_dt, float("nan"))
-                    macd_dif = m["macd"].get(locked_dt, float("nan"))
-                    macd_sig = m["signal"].get(locked_dt, float("nan"))
-                    macd_h = m["hist"].get(locked_dt, float("nan"))
+        if locked_dt is not None and locked_dt in df.index:
+            row = df.loc[locked_dt]
+            ma5_v = ma5_series.get(locked_dt, float("nan"))
+            ma20_v = ma20_series.get(locked_dt, float("nan"))
+            bb_u = b["upper"].get(locked_dt, float("nan"))
+            bb_l = b["lower"].get(locked_dt, float("nan"))
+            vol_ma_v = vol_ma5.get(locked_dt, float("nan"))
+            k_v = kd["k"].get(locked_dt, float("nan"))
+            d_v = kd["d"].get(locked_dt, float("nan"))
+            macd_dif = m["macd"].get(locked_dt, float("nan"))
+            macd_sig = m["signal"].get(locked_dt, float("nan"))
+            macd_h = m["hist"].get(locked_dt, float("nan"))
 
-                    c1, c2 = st.columns([5, 1])
-                    c1.markdown(
-                        f"### 📍 {locked_dt.strftime('%Y-%m-%d')} ({locked_dt.strftime('%a')}) "
-                        f"指標讀值"
-                    )
-                    if c2.button("清除標記", key=f"clear_lock_{selected}"):
-                        del st.session_state[locked_key]
-                        st.rerun()
-
-                    col1, col2, col3, col4 = st.columns(4)
-                    col1.metric("收盤", f"{row['close']:.2f}",
-                                f"{(row['close'] - row['open']):+.2f}")
-                    col1.caption(f"開 {row['open']:.2f} | 高 {row['high']:.2f} | 低 {row['low']:.2f}")
-                    col2.metric(f"MA{ind_p['ma']['short']}", f"{ma5_v:.2f}",
-                                f"{(row['close'] - ma5_v):+.2f}" if not pd.isna(ma5_v) else "—")
-                    col2.caption(f"MA{ind_p['ma']['mid']}: {ma20_v:.2f}")
-                    col3.metric("KD", f"K={k_v:.1f}",
-                                f"D={d_v:.1f}" if not pd.isna(d_v) else "—")
-                    col3.caption(f"成交量 {row['volume']:,.0f}")
-                    col4.metric("MACD 柱", f"{macd_h:+.3f}",
-                                "翻紅" if macd_h > 0 else "翻綠")
-                    col4.caption(f"DIF {macd_dif:.3f} | MACD {macd_sig:.3f}")
-                else:
-                    st.warning(f"鎖定日期 {locked_dt.date()} 不在資料範圍內")
-            except Exception as e:
-                st.warning(f"無法顯示該日數值：{e}")
-        else:
-            st.caption("💡 提示：**點擊圖表上任一資料點** → 鎖定該日期，圖上會畫垂直線、下方顯示精確指標數值")
+            st.markdown(
+                f"#### 📍 {locked_dt.strftime('%Y-%m-%d')} "
+                f"({locked_dt.strftime('%a')}) 指標讀值"
+            )
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("收盤", f"{row['close']:.2f}",
+                        f"{(row['close'] - row['open']):+.2f}")
+            col1.caption(f"開 {row['open']:.2f} | 高 {row['high']:.2f} | 低 {row['low']:.2f}")
+            col2.metric(f"MA{ind_p['ma']['short']}",
+                        f"{ma5_v:.2f}" if not pd.isna(ma5_v) else "—",
+                        f"{(row['close'] - ma5_v):+.2f}" if not pd.isna(ma5_v) else None)
+            col2.caption(
+                f"MA{ind_p['ma']['mid']}: "
+                f"{ma20_v:.2f}" if not pd.isna(ma20_v) else "—"
+            )
+            col2.caption(f"布林：{bb_l:.2f} ~ {bb_u:.2f}"
+                         if not pd.isna(bb_u) else "")
+            col3.metric("K 值",
+                        f"{k_v:.1f}" if not pd.isna(k_v) else "—",
+                        f"D={d_v:.1f}" if not pd.isna(d_v) else None)
+            col3.caption(f"成交量 {row['volume']:,.0f}")
+            col3.caption(f"量 MA5: {vol_ma_v:,.0f}" if not pd.isna(vol_ma_v) else "")
+            col4.metric("MACD 柱",
+                        f"{macd_h:+.3f}" if not pd.isna(macd_h) else "—",
+                        "翻紅" if (not pd.isna(macd_h)) and macd_h > 0
+                        else ("翻綠" if not pd.isna(macd_h) else None))
+            col4.caption(f"DIF {macd_dif:.3f}" if not pd.isna(macd_dif) else "")
+            col4.caption(f"MACD {macd_sig:.3f}" if not pd.isna(macd_sig) else "")
 
 # ---------- Tab 3: Help ----------
 
