@@ -15,9 +15,6 @@ sys.path.insert(0, str(ROOT))
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
-import plotly.graph_objects as go
-import plotly.io as pio
-from plotly.subplots import make_subplots
 
 from streamlit_local_storage import LocalStorage
 
@@ -639,457 +636,329 @@ with tab_detail:
             key="marker_select",
         )
 
-        # ---------- Color palette ----------
-        CL = {
-            "k_up": "#d62728",      # 台股紅
-            "k_down": "#26a65b",    # 台股綠
-            "ma5": "#ff8c00",       # 橘
-            "ma20": "#2962ff",      # 藍
-            "bb_band": "#9aa0a6",   # 灰（虛線）
-            "vol_up": "#f4a8a8",    # 淡紅
-            "vol_down": "#a8d4b9",  # 淡綠
-            "vol_ma5": "#555555",
-            "kd_k": "#d62728",
-            "kd_d": "#2962ff",
-            "kd_oversold": "#aaaaaa",
-            "macd_dif": "#2962ff",
-            "macd_sig": "#ff8c00",
-            "macd_up": "#d62728",
-            "macd_down": "#26a65b",
-            "grid": "#eef0f3",
-        }
 
-        fig = make_subplots(
-            rows=4, cols=1, shared_xaxes=True,
-            row_heights=[0.50, 0.16, 0.17, 0.17],
-            vertical_spacing=0.03,
-            subplot_titles=("K 線 + 均線 + 布林通道", "成交量",
-                            "KD（台股 9-3-3）", "MACD"),
-        )
+        # ---------- Lightweight Charts v5 multi-pane ----------
+        import json as _json
 
-        # ---- Row 1: 布林（最底）、均線、K 線（最上）----
-        # 為減少 legend 雜亂：只在 legend 顯示 MA5 / MA20，其他隱藏
-        b = bbands(df["close"], ind_p["bbands"]["period"], ind_p["bbands"]["std"])
-        fig.add_trace(go.Scatter(x=df.index, y=b["upper"], name="布林通道",
-                                 line=dict(dash="dot", width=1, color=CL["bb_band"]),
-                                 hovertemplate="布林上軌 %{y:.2f}<extra></extra>",
-                                 legendgroup="bb", showlegend=False),
-                      row=1, col=1)
-        fig.add_trace(go.Scatter(x=df.index, y=b["lower"], name="布林通道",
-                                 line=dict(dash="dot", width=1, color=CL["bb_band"]),
-                                 fill="tonexty", fillcolor="rgba(154,160,166,0.06)",
-                                 hovertemplate="布林下軌 %{y:.2f}<extra></extra>",
-                                 legendgroup="bb", showlegend=False),
-                      row=1, col=1)
+        # Indicators
         ma5_series = sma(df["close"], ind_p["ma"]["short"])
         ma20_series = sma(df["close"], ind_p["ma"]["mid"])
-        fig.add_trace(go.Scatter(x=df.index, y=ma5_series,
-                                 name=f"MA{ind_p['ma']['short']}",
-                                 line=dict(width=1.4, color=CL["ma5"]),
-                                 hovertemplate=f"MA{ind_p['ma']['short']} %{{y:.2f}}<extra></extra>"),
-                      row=1, col=1)
-        fig.add_trace(go.Scatter(x=df.index, y=ma20_series,
-                                 name=f"MA{ind_p['ma']['mid']}",
-                                 line=dict(width=1.4, color=CL["ma20"]),
-                                 hovertemplate=f"MA{ind_p['ma']['mid']} %{{y:.2f}}<extra></extra>"),
-                      row=1, col=1)
-        fig.add_trace(go.Candlestick(x=df.index, open=df["open"], high=df["high"],
-                                     low=df["low"], close=df["close"], name="K 線",
-                                     increasing_line_color=CL["k_up"],
-                                     increasing_fillcolor=CL["k_up"],
-                                     decreasing_line_color=CL["k_down"],
-                                     decreasing_fillcolor=CL["k_down"],
-                                     line=dict(width=1),
-                                     showlegend=False),
-                      row=1, col=1)
-
-        # ---- Row 2: Volume（不進 legend，subplot title 已說明）----
-        vol_colors = [CL["vol_up"] if c >= o else CL["vol_down"]
-                      for c, o in zip(df["close"], df["open"])]
-        fig.add_trace(go.Bar(x=df.index, y=df["volume"], name="成交量",
-                             marker_color=vol_colors,
-                             marker_line_width=0,
-                             hovertemplate="成交量 %{y:,.0f}<extra></extra>",
-                             showlegend=False),
-                      row=2, col=1)
-        vol_ma5 = df["volume"].rolling(5, min_periods=5).mean()
-        fig.add_trace(go.Scatter(x=df.index, y=vol_ma5, name="量 MA5",
-                                 line=dict(width=1, color=CL["vol_ma5"], dash="dash"),
-                                 hovertemplate="量 MA5 %{y:,.0f}<extra></extra>",
-                                 showlegend=False),
-                      row=2, col=1)
-
-        # ---- Row 3: KD（不進 legend）----
+        b = bbands(df["close"], ind_p["bbands"]["period"], ind_p["bbands"]["std"])
         kd = kd_taiwan(df["high"], df["low"], df["close"], ind_p["kd"]["k_period"])
-        fig.add_trace(go.Scatter(x=df.index, y=kd["k"], name="K",
-                                 line=dict(width=1.5, color=CL["kd_k"]),
-                                 hovertemplate="K %{y:.1f}<extra></extra>",
-                                 showlegend=False),
-                      row=3, col=1)
-        fig.add_trace(go.Scatter(x=df.index, y=kd["d"], name="D",
-                                 line=dict(width=1.5, color=CL["kd_d"]),
-                                 hovertemplate="D %{y:.1f}<extra></extra>",
-                                 showlegend=False),
-                      row=3, col=1)
-        fig.add_hline(y=ind_p["kd"]["oversold"], line_dash="dash",
-                      line_color=CL["kd_oversold"], line_width=1, row=3, col=1)
-        fig.add_hline(y=80, line_dash="dash",
-                      line_color=CL["kd_oversold"], line_width=1, row=3, col=1)
-
-        # ---- Row 4: MACD（不進 legend）----
         m = macd(df["close"], ind_p["macd"]["fast"], ind_p["macd"]["slow"],
                  ind_p["macd"]["signal"])
-        hist_colors = [CL["macd_up"] if h >= 0 else CL["macd_down"]
-                       for h in m["hist"].fillna(0)]
-        fig.add_trace(go.Bar(x=df.index, y=m["hist"], name="MACD 柱",
-                             marker_color=hist_colors, marker_line_width=0,
-                             hovertemplate="柱 %{y:.3f}<extra></extra>",
-                             showlegend=False),
-                      row=4, col=1)
-        fig.add_trace(go.Scatter(x=df.index, y=m["macd"], name="DIF",
-                                 line=dict(width=1.4, color=CL["macd_dif"]),
-                                 hovertemplate="DIF %{y:.3f}<extra></extra>",
-                                 showlegend=False),
-                      row=4, col=1)
-        fig.add_trace(go.Scatter(x=df.index, y=m["signal"], name="MACD",
-                                 line=dict(width=1.4, color=CL["macd_sig"]),
-                                 hovertemplate="MACD %{y:.3f}<extra></extra>",
-                                 showlegend=False),
-                      row=4, col=1)
+        vol_ma5 = df["volume"].rolling(5, min_periods=5).mean()
 
-        # ---- Rule markers (config-driven for 18 of 19; double_bottom is special) ----
-        marker_params = cfg_static["indicators"]
+        def _t(d):
+            return d.strftime("%Y-%m-%d")
 
-        # 每條規則的 marker 樣式 + 子圖位置 + y 計算方式
-        # y 種類：low_below(K下) high_above(K上) vol_above(量上) ma20(月線值)
-        #        macd_hist(MACD柱值) kd_k(K值) body_mid(K棒中點)
-        MARKER_CFG = {
-            # 趨勢類（多在 K 線子圖）
-            "ma_golden_cross":         dict(row=1, sym="triangle-up", c="#ff8c00", b="#cc7000", t="金叉",       y="low_below",  s=14),
-            "ma_bullish_alignment":    dict(row=1, sym="triangle-up", c="#2e7d32", b="#1b5e20", t=None,         y="low_below",  s=10),
-            "ma_converge_breakout":    dict(row=1, sym="star",        c="#fbc02d", b="#f57f17", t="突破糾結",   y="high_above", s=13),
-            "pullback_holds_ma20":     dict(row=1, sym="circle-open", c="#1565c0", b="#0d3d8a", t=None,         y="ma20",       s=10),
-            "macd_hist_turn_positive": dict(row=4, sym="triangle-up", c="#d32f2f", b="#9a0007", t=None,         y="macd_hist",  s=10),
-            "adx_strong_uptrend":      dict(row=1, sym="diamond",     c="#1b5e20", b="#003300", t=None,         y="low_below",  s=8),
+        candle_data = [
+            {"time": _t(idx), "open": float(r.open), "high": float(r.high),
+             "low": float(r.low), "close": float(r.close)}
+            for idx, r in df.iterrows()
+        ]
+        ma5_data = [{"time": _t(d), "value": float(v)} for d, v in ma5_series.dropna().items()]
+        ma20_data = [{"time": _t(d), "value": float(v)} for d, v in ma20_series.dropna().items()]
+        bb_upper_data = [{"time": _t(d), "value": float(v)} for d, v in b["upper"].dropna().items()]
+        bb_lower_data = [{"time": _t(d), "value": float(v)} for d, v in b["lower"].dropna().items()]
+        vol_data = [
+            {"time": _t(idx), "value": float(r.volume),
+             "color": "rgba(244,168,168,0.7)" if r.close >= r.open
+             else "rgba(168,212,185,0.7)"}
+            for idx, r in df.iterrows()
+        ]
+        vol_ma5_data = [{"time": _t(d), "value": float(v)} for d, v in vol_ma5.dropna().items()]
+        k_data = [{"time": _t(d), "value": float(v)} for d, v in kd["k"].dropna().items()]
+        d_data = [{"time": _t(d), "value": float(v)} for d, v in kd["d"].dropna().items()]
+        macd_dif_data = [{"time": _t(d), "value": float(v)} for d, v in m["macd"].dropna().items()]
+        macd_sig_data = [{"time": _t(d), "value": float(v)} for d, v in m["signal"].dropna().items()]
+        macd_hist_data = [
+            {"time": _t(d), "value": float(v),
+             "color": "#d62728" if v >= 0 else "#26a65b"}
+            for d, v in m["hist"].dropna().items()
+        ]
+
+        # ---------- Marker config (LWC has 4 shapes: arrowUp/arrowDown/circle/square) ----------
+        MARKER_LWC = {
+            # 趨勢類
+            "ma_golden_cross":         dict(pane=0, shape="arrowUp", pos="belowBar", color="#ff8c00", text="金叉"),
+            "ma_bullish_alignment":    dict(pane=0, shape="arrowUp", pos="belowBar", color="#2e7d32", text="排列"),
+            "ma_converge_breakout":    dict(pane=0, shape="arrowUp", pos="aboveBar", color="#fbc02d", text="糾結突破"),
+            "pullback_holds_ma20":     dict(pane=0, shape="circle",  pos="inBar",    color="#1565c0", text="守月線"),
+            "macd_hist_turn_positive": dict(pane=3, shape="arrowUp", pos="belowBar", color="#d32f2f", text="MACD翻紅"),
+            "adx_strong_uptrend":      dict(pane=0, shape="circle",  pos="belowBar", color="#1b5e20", text="ADX強"),
             # 動能類
-            "kd_oversold_golden":      dict(row=3, sym="triangle-up", c="#26a65b", b="#1e7d44", t=None,         y="kd_k",       s=12),
-            "rsi_recover":             dict(row=3, sym="triangle-up", c="#66bb6a", b="#2e7d32", t=None,         y="kd_mid",     s=10),
+            "kd_oversold_golden":      dict(pane=2, shape="arrowUp", pos="belowBar", color="#26a65b", text="KD金叉"),
+            "rsi_recover":             dict(pane=2, shape="circle",  pos="inBar",    color="#66bb6a", text="RSI"),
             # 量價類
-            "volume_breakout":         dict(row=2, sym="star",        c="#ffb300", b="#cc7a00", t=None,         y="vol_above",  s=12),
-            "price_volume_surge":      dict(row=2, sym="triangle-up", c="#ffd54f", b="#f9a825", t=None,         y="vol_above",  s=10),
-            "obv_new_high":            dict(row=1, sym="diamond",     c="#8d6e63", b="#5d4037", t=None,         y="low_below",  s=9),
-            "volume_dry_red_surge":    dict(row=2, sym="star",        c="#ef6c00", b="#d04000", t="縮量轉攻",   y="vol_above",  s=12),
+            "volume_breakout":         dict(pane=1, shape="arrowUp", pos="aboveBar", color="#ffb300", text="爆量"),
+            "price_volume_surge":      dict(pane=1, shape="arrowUp", pos="aboveBar", color="#ffd54f", text="量價揚"),
+            "obv_new_high":            dict(pane=0, shape="square",  pos="belowBar", color="#8d6e63", text="OBV高"),
+            "volume_dry_red_surge":    dict(pane=1, shape="arrowUp", pos="aboveBar", color="#ef6c00", text="縮量轉攻"),
             # 波動類
-            "bbands_lower_bounce":     dict(row=1, sym="star",        c="#00acc1", b="#00838f", t=None,         y="low_below",  s=11),
-            "bbands_upper_break":      dict(row=1, sym="star",        c="#9c27b0", b="#6a1b9a", t=None,         y="high_above", s=13),
-            "atr_expansion":           dict(row=1, sym="x",           c="#757575", b="#424242", t=None,         y="high_above", s=10),
+            "bbands_lower_bounce":     dict(pane=0, shape="arrowUp", pos="belowBar", color="#00acc1", text="下軌彈"),
+            "bbands_upper_break":      dict(pane=0, shape="circle",  pos="aboveBar", color="#9c27b0", text="突破上軌"),
+            "atr_expansion":           dict(pane=0, shape="square",  pos="aboveBar", color="#757575", text="ATR↑"),
             # 型態類
-            "long_red_breakout":       dict(row=1, sym="triangle-up", c="#c62828", b="#8e0000", t="長紅",       y="high_above", s=12),
-            "long_lower_shadow":       dict(row=1, sym="arrow-up",    c="#1565c0", b="#0d3d8a", t="止跌",       y="low_below",  s=14),
-            "doji_or_spinning_top":    dict(row=1, sym="diamond",     c="#6a1b9a", b="#4a148c", t=None,         y="body_mid",   s=10),
+            "long_red_breakout":       dict(pane=0, shape="arrowUp", pos="aboveBar", color="#c62828", text="長紅"),
+            "long_lower_shadow":       dict(pane=0, shape="arrowUp", pos="belowBar", color="#1565c0", text="止跌"),
+            "doji_or_spinning_top":    dict(pane=0, shape="circle",  pos="inBar",    color="#6a1b9a", text="變盤"),
+            "double_bottom":           dict(pane=0, shape="arrowUp", pos="belowBar", color="#e91e63", text="W底"),
         }
+        SHAPE_SYM = {"arrowUp": "↑", "arrowDown": "↓", "circle": "●", "square": "■"}
 
-        def _y_for(date, kind):
-            try:
-                if kind == "low_below":
-                    return float(df.at[date, "low"]) * 0.985
-                if kind == "high_above":
-                    return float(df.at[date, "high"]) * 1.012
-                if kind == "vol_above":
-                    return float(df.at[date, "volume"]) * 1.05
-                if kind == "ma20":
-                    v = ma20_series.get(date, float("nan"))
-                    return float(v) if not pd.isna(v) else float(df.at[date, "close"])
-                if kind == "macd_hist":
-                    v = m["hist"].get(date, float("nan"))
-                    return float(v) if not pd.isna(v) else 0.0
-                if kind == "kd_k":
-                    v = kd["k"].get(date, float("nan"))
-                    return float(v) if not pd.isna(v) else 50.0
-                if kind == "kd_mid":
-                    return 50.0
-                if kind == "body_mid":
-                    return (float(df.at[date, "open"]) + float(df.at[date, "close"])) / 2
-            except Exception:
-                pass
-            return float(df.at[date, "close"]) if date in df.index else 0.0
-
+        markers_by_pane = {0: [], 1: [], 2: [], 3: []}
         for rule_id in chosen_markers:
-            occurrences = find_markers(rule_id, df, marker_params)
-            if not occurrences:
-                continue
-            label = rule_zh(rule_id)
-
-            # 雙底：特殊樣式（兩個低點 + 虛線連線）
-            if rule_id == "double_bottom":
-                for occ in occurrences:
-                    fig.add_trace(go.Scatter(
-                        x=[occ["first_date"], occ["second_date"]],
-                        y=[occ["first_price"] * 0.99, occ["second_price"] * 0.99],
-                        name=label,
-                        mode="lines+markers+text",
-                        marker=dict(symbol="circle", size=14,
-                                    color="rgba(255,255,255,0)",
-                                    line=dict(width=2, color="#e91e63")),
-                        line=dict(width=1.5, color="#e91e63", dash="dash"),
-                        text=["第一腳", "第二腳"],
-                        textposition="bottom center",
-                        textfont=dict(size=10, color="#e91e63"),
-                        hovertemplate=f"{label}<extra></extra>",
-                        showlegend=True,
-                    ), row=1, col=1)
-                continue
-
-            # 其餘 18 條走 config 表
-            cfg_m = MARKER_CFG.get(rule_id)
+            cfg_m = MARKER_LWC.get(rule_id)
             if not cfg_m:
                 continue
+            occs = find_markers(rule_id, df, cfg_static["indicators"])
+            for occ in occs:
+                d = occ.get("second_date") or occ.get("date")
+                if d is None:
+                    continue
+                markers_by_pane[cfg_m["pane"]].append({
+                    "time": _t(d),
+                    "position": cfg_m["pos"],
+                    "color": cfg_m["color"],
+                    "shape": cfg_m["shape"],
+                    "text": cfg_m["text"],
+                })
+        for k_p in markers_by_pane:
+            markers_by_pane[k_p].sort(key=lambda x: x["time"])
 
-            xs = [o["date"] for o in occurrences]
-            ys = [_y_for(o["date"], cfg_m["y"]) for o in occurrences]
-            mode = "markers+text" if cfg_m.get("t") else "markers"
-            text = [cfg_m["t"]] * len(xs) if cfg_m.get("t") else None
-            text_pos = "bottom center" if cfg_m["y"] in ("low_below",) else "top center"
-
-            fig.add_trace(go.Scatter(
-                x=xs, y=ys, name=label,
-                mode=mode,
-                marker=dict(
-                    symbol=cfg_m["sym"],
-                    size=cfg_m.get("s", 11),
-                    color=cfg_m["c"],
-                    line=dict(width=1.2, color=cfg_m["b"]),
-                ),
-                text=text,
-                textposition=text_pos,
-                textfont=dict(size=10, color=cfg_m["b"]),
-                hovertemplate=f"{label}<br>%{{x|%Y-%m-%d}}<extra></extra>",
-            ), row=cfg_m["row"], col=1)
-
-        # ---- Layout ----
-        fig.update_layout(
-            height=760,
-            xaxis_rangeslider_visible=False,
-            showlegend=True,
-            hovermode="x unified",
-            hoverlabel=dict(
-                bgcolor="rgba(255,255,255,0.97)",
-                bordercolor="#888",
-                font=dict(size=14, color="#222"),
-                namelength=-1,
-            ),
-            legend=dict(
-                orientation="h",
-                yanchor="bottom", y=1.05,
-                xanchor="left", x=0,
-                font=dict(size=14),
-                bgcolor="rgba(255,255,255,0.85)",
-                itemsizing="constant",
-                itemwidth=60,
-                bordercolor="#e5e5e5",
-                borderwidth=1,
-            ),
-            margin=dict(l=70, r=30, t=80, b=50),
-            plot_bgcolor="white",
-            paper_bgcolor="white",
-            font=dict(size=13),
+        # ---------- 動態 legend ----------
+        legend_items = []
+        for rule_id in chosen_markers:
+            cfg_m = MARKER_LWC.get(rule_id)
+            if not cfg_m:
+                continue
+            sym = SHAPE_SYM.get(cfg_m["shape"], "●")
+            legend_items.append(
+                f"<span style='display:inline-block;margin-right:1rem;white-space:nowrap;'>"
+                f"<b style='color:{cfg_m['color']};'>{sym} {cfg_m['text']}</b>"
+                f"<span style='color:#888;font-size:0.85em;'> {rule_zh(rule_id)}</span></span>"
+            )
+        legend_html_inner = "".join(legend_items) if legend_items else \
+            "<span style='color:#888'>未選擇任何標記</span>"
+        st.markdown(
+            f"<div style='display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap;"
+            f"padding:0.5rem 0.8rem;background:#f8f9fa;border:1px solid #e0e0e0;"
+            f"border-radius:6px;margin-bottom:0.4rem;font-size:0.95rem;'>"
+            f"<span style='font-weight:600;color:#555;'>🎯 標記對照</span>"
+            f"{legend_html_inner}</div>",
+            unsafe_allow_html=True,
         )
-        # Subplot titles
-        for ann in fig["layout"]["annotations"]:
-            ann["font"] = dict(size=14, color="#1f3a5f")
-            ann["x"] = 0.0
-            ann["xanchor"] = "left"
-        # Grid + tick font styling
-        fig.update_xaxes(
-            showgrid=True, gridcolor=CL["grid"], gridwidth=1,
-            tickfont=dict(size=12),
-        )
-        fig.update_yaxes(
-            showgrid=True, gridcolor=CL["grid"], gridwidth=1,
-            tickfont=dict(size=12),
-        )
-        # Hide weekend gaps for daily K
-        fig.update_xaxes(rangebreaks=[dict(bounds=["sat", "mon"])])
 
-        # 用 fig.to_json() 取出純資料，由 JS 在 iframe 父容器有寬度後再 newPlot
-        # 這樣 plotly 一開始就以正確尺寸畫，避免 0 寬度初始化的問題
-        plot_id = f"chart-{selected.replace('.', '-')}"
-        fig_json = fig.to_json()
-        plotly_config = {
-            "displayModeBar": True,
-            "displaylogo": False,
-            "modeBarButtonsToRemove": ["lasso2d", "select2d"],
-            "scrollZoom": True,
-            "responsive": True,
+        # ---------- Build payload + HTML ----------
+        payload = {
+            "candle": candle_data,
+            "ma5": ma5_data, "ma20": ma20_data,
+            "bb_upper": bb_upper_data, "bb_lower": bb_lower_data,
+            "vol": vol_data, "vol_ma5": vol_ma5_data,
+            "k": k_data, "d": d_data,
+            "macd_dif": macd_dif_data, "macd_sig": macd_sig_data,
+            "macd_hist": macd_hist_data,
+            "markers_p0": markers_by_pane[0],
+            "markers_p1": markers_by_pane[1],
+            "markers_p2": markers_by_pane[2],
+            "markers_p3": markers_by_pane[3],
         }
-        import json as _json
-        config_json = _json.dumps(plotly_config)
+        payload_json = _json.dumps(payload)
+        ma_short = ind_p["ma"]["short"]
+        ma_mid = ind_p["ma"]["mid"]
 
-        # nonce 包含 stock + 已選 markers + scan_ts → 任何相關狀態變動都會強制 iframe 重建
-        import hashlib as _hashlib
-        _nonce_seed = f"{selected}|{','.join(chosen_markers)}|{scan_ts}"
-        _nonce = _hashlib.md5(_nonce_seed.encode("utf-8")).hexdigest()[:10]
-        full_html = f"""
+        chart_html_template = """
 <!DOCTYPE html>
-<html data-nonce="{_nonce}">
+<html>
 <head>
 <meta charset="utf-8">
-<meta name="nonce" content="{_nonce}">
-<meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate">
-<meta http-equiv="pragma" content="no-cache">
-<meta http-equiv="expires" content="0">
 <style>
-  html, body {{ margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; }}
-  #{plot_id} {{ width: 100%; height: 100%; }}
+  html, body { margin: 0; padding: 0; font-family: -apple-system, "Microsoft JhengHei", sans-serif; }
+  #chart { width: 100%; height: 800px; position: relative; }
+  .legend {
+    position: absolute; left: 12px; z-index: 10;
+    font-size: 11px; background: rgba(255,255,255,0.92);
+    border: 1px solid #ddd; border-radius: 3px; padding: 3px 8px;
+    line-height: 1.6; pointer-events: none;
+  }
+  .legend .item { display: inline-block; margin-right: 10px; }
+  .legend .swatch {
+    display: inline-block; width: 12px; height: 2px; vertical-align: middle;
+    margin-right: 4px;
+  }
 </style>
-<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<script src="https://unpkg.com/lightweight-charts@5.0.7/dist/lightweight-charts.standalone.production.js"></script>
 </head>
-<body data-nonce="{_nonce}">
-<div id="{plot_id}" data-stock="{selected}" data-nonce="{_nonce}"></div>
-<script id="fig-data" type="application/json">{fig_json}</script>
+<body>
+<div id="chart"></div>
+<div class="legend" id="legend-k" style="top: 6px;"></div>
+<div class="legend" id="legend-vol" style="top: 432px;"></div>
+<div class="legend" id="legend-kd" style="top: 548px;"></div>
+<div class="legend" id="legend-macd" style="top: 690px;"></div>
+
 <script>
-(function() {{
-    var gd = document.getElementById("{plot_id}");
-    var figData = JSON.parse(document.getElementById("fig-data").textContent);
-    var config = {config_json};
-    var rendered = false;
-    var baseShapes = [];
+const D = __PAYLOAD__;
+const MA_SHORT = __MA_SHORT__;
+const MA_MID = __MA_MID__;
+const LWC = LightweightCharts;
 
-    function setupHoverCrosshair() {{
-        baseShapes = (gd.layout && gd.layout.shapes)
-            ? JSON.parse(JSON.stringify(gd.layout.shapes)) : [];
-        gd.on("plotly_hover", function(data) {{
-            if (!data.points || !data.points.length) return;
-            var x = data.points[0].x;
-            Plotly.relayout(gd, {{ shapes: baseShapes.concat([{{
-                type: "line", xref: "x", yref: "paper",
-                x0: x, x1: x, y0: 0, y1: 1,
-                line: {{ color: "#1f3a5f", width: 1.5 }},
-                opacity: 0.85
-            }}]) }});
-        }});
-        gd.on("plotly_unhover", function() {{
-            Plotly.relayout(gd, {{ shapes: baseShapes }});
-        }});
-    }}
+const chart = LWC.createChart(document.getElementById('chart'), {
+  layout: {
+    background: { type: 'solid', color: 'white' },
+    textColor: '#222', fontSize: 12,
+    panes: { separatorColor: '#cfcfcf', separatorHoverColor: 'rgba(0,0,0,0.1)' },
+  },
+  grid: { vertLines: { color: '#eef0f3' }, horzLines: { color: '#eef0f3' } },
+  crosshair: {
+    mode: 0,
+    vertLine: { width: 1, color: '#1f3a5f', style: 0,
+                labelBackgroundColor: '#1f3a5f' },
+    horzLine: { width: 1, color: '#aaa', style: 1,
+                labelBackgroundColor: '#1f3a5f' },
+  },
+  rightPriceScale: { borderColor: '#ccc' },
+  timeScale: { borderColor: '#ccc' },
+});
 
-    function tryRender() {{
-        if (rendered) return;
-        var w = gd.clientWidth;
-        if (w < 100) {{
-            // 父容器還沒量好，等一下再試
-            setTimeout(tryRender, 50);
-            return;
-        }}
-        // 父容器尺寸已知 → 第一次也是唯一一次 newPlot
-        Plotly.newPlot(gd, figData.data, figData.layout, config).then(function() {{
-            rendered = true;
-            setupHoverCrosshair();
-        }});
-    }}
+const candleSeries = chart.addSeries(LWC.CandlestickSeries, {
+  upColor: '#d62728', downColor: '#26a65b',
+  wickUpColor: '#d62728', wickDownColor: '#26a65b',
+  borderVisible: false, priceLineVisible: false, lastValueVisible: true,
+});
+candleSeries.setData(D.candle);
+const ma5Series = chart.addSeries(LWC.LineSeries, {
+  color: '#ff8c00', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false,
+});
+ma5Series.setData(D.ma5);
+const ma20Series = chart.addSeries(LWC.LineSeries, {
+  color: '#2962ff', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false,
+});
+ma20Series.setData(D.ma20);
+const bbU = chart.addSeries(LWC.LineSeries, {
+  color: '#9aa0a6', lineWidth: 1, lineStyle: 1,
+  priceLineVisible: false, lastValueVisible: false,
+});
+bbU.setData(D.bb_upper);
+const bbL = chart.addSeries(LWC.LineSeries, {
+  color: '#9aa0a6', lineWidth: 1, lineStyle: 1,
+  priceLineVisible: false, lastValueVisible: false,
+});
+bbL.setData(D.bb_lower);
+if (D.markers_p0.length) LWC.createSeriesMarkers(candleSeries, D.markers_p0);
 
-    // 監聽後續 resize 事件
-    window.addEventListener("resize", function() {{
-        if (rendered) {{
-            try {{ Plotly.Plots.resize(gd); }} catch(e) {{}}
-        }}
-    }});
-    if (typeof ResizeObserver !== "undefined") {{
-        var ro = new ResizeObserver(function() {{
-            if (rendered) {{
-                try {{ Plotly.Plots.resize(gd); }} catch(e) {{}}
-            }}
-        }});
-        ro.observe(document.body);
-    }}
+const volSeries = chart.addSeries(LWC.HistogramSeries, {
+  priceFormat: { type: 'volume' },
+}, 1);
+volSeries.setData(D.vol);
+const volMaSeries = chart.addSeries(LWC.LineSeries, {
+  color: '#555', lineWidth: 1, lineStyle: 2,
+  priceLineVisible: false, lastValueVisible: false,
+}, 1);
+volMaSeries.setData(D.vol_ma5);
+if (D.markers_p1.length) LWC.createSeriesMarkers(volSeries, D.markers_p1);
 
-    tryRender();
-}})();
+const kSeries = chart.addSeries(LWC.LineSeries, {
+  color: '#d62728', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: true,
+}, 2);
+kSeries.setData(D.k);
+const dSeries = chart.addSeries(LWC.LineSeries, {
+  color: '#2962ff', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: true,
+}, 2);
+dSeries.setData(D.d);
+if (D.markers_p2.length) LWC.createSeriesMarkers(kSeries, D.markers_p2);
+
+const histSeries = chart.addSeries(LWC.HistogramSeries, {
+  priceFormat: { type: 'price', precision: 3, minMove: 0.001 },
+}, 3);
+histSeries.setData(D.macd_hist);
+const difSeries = chart.addSeries(LWC.LineSeries, {
+  color: '#2962ff', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false,
+}, 3);
+difSeries.setData(D.macd_dif);
+const sigSeries = chart.addSeries(LWC.LineSeries, {
+  color: '#ff8c00', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false,
+}, 3);
+sigSeries.setData(D.macd_sig);
+if (D.markers_p3.length) LWC.createSeriesMarkers(histSeries, D.markers_p3);
+
+function setPaneHeights() {
+  try {
+    const panes = chart.panes();
+    if (panes.length >= 4) {
+      panes[0].setHeight(420);
+      panes[1].setHeight(110);
+      panes[2].setHeight(140);
+      panes[3].setHeight(140);
+    }
+  } catch(e) {}
+}
+setTimeout(setPaneHeights, 100);
+
+function find(arr, time) { return arr.find(x => x.time === time); }
+function staticK() {
+  return `<span class="item"><span class="swatch" style="background:#ff8c00"></span>MA${MA_SHORT}</span>` +
+         `<span class="item"><span class="swatch" style="background:#2962ff"></span>MA${MA_MID}</span>` +
+         `<span class="item" style="color:#9aa0a6">布林通道</span>`;
+}
+function staticKD() {
+  return `<span class="item"><span class="swatch" style="background:#d62728"></span>K</span>` +
+         `<span class="item"><span class="swatch" style="background:#2962ff"></span>D</span>`;
+}
+function staticMACD() {
+  return `<span class="item"><span class="swatch" style="background:#2962ff"></span>DIF</span>` +
+         `<span class="item"><span class="swatch" style="background:#ff8c00"></span>MACD</span>`;
+}
+document.getElementById('legend-k').innerHTML = staticK();
+document.getElementById('legend-vol').innerHTML = '成交量';
+document.getElementById('legend-kd').innerHTML = staticKD();
+document.getElementById('legend-macd').innerHTML = staticMACD();
+
+chart.subscribeCrosshairMove(p => {
+  const time = p && p.time ? p.time : null;
+  if (!time) {
+    document.getElementById('legend-k').innerHTML = staticK();
+    document.getElementById('legend-vol').innerHTML = '成交量';
+    document.getElementById('legend-kd').innerHTML = staticKD();
+    document.getElementById('legend-macd').innerHTML = staticMACD();
+    return;
+  }
+  const c = find(D.candle, time);
+  const m5 = find(D.ma5, time);
+  const m20 = find(D.ma20, time);
+  let h = '';
+  if (c) h += `<span class="item"><b>${time}</b> 開${c.open} 高${c.high} 低${c.low} <b style="color:${c.close >= c.open ? '#d62728' : '#26a65b'}">收${c.close}</b></span>`;
+  if (m5) h += `<span class="item"><span class="swatch" style="background:#ff8c00"></span>MA${MA_SHORT} ${m5.value.toFixed(2)}</span>`;
+  if (m20) h += `<span class="item"><span class="swatch" style="background:#2962ff"></span>MA${MA_MID} ${m20.value.toFixed(2)}</span>`;
+  document.getElementById('legend-k').innerHTML = h;
+  const v = find(D.vol, time);
+  document.getElementById('legend-vol').innerHTML = v ? `量 ${Math.round(v.value).toLocaleString()}` : '成交量';
+  const kv = find(D.k, time);
+  const dv = find(D.d, time);
+  let kdh = '';
+  if (kv) kdh += `<span class="item"><span class="swatch" style="background:#d62728"></span>K ${kv.value.toFixed(1)}</span>`;
+  if (dv) kdh += `<span class="item"><span class="swatch" style="background:#2962ff"></span>D ${dv.value.toFixed(1)}</span>`;
+  document.getElementById('legend-kd').innerHTML = kdh || staticKD();
+  const dif = find(D.macd_dif, time);
+  const sig = find(D.macd_sig, time);
+  const mh = find(D.macd_hist, time);
+  let mhtml = '';
+  if (mh) mhtml += `<span class="item">柱 <b style="color:${mh.value >= 0 ? '#d62728' : '#26a65b'}">${mh.value.toFixed(3)}</b></span>`;
+  if (dif) mhtml += `<span class="item"><span class="swatch" style="background:#2962ff"></span>DIF ${dif.value.toFixed(3)}</span>`;
+  if (sig) mhtml += `<span class="item"><span class="swatch" style="background:#ff8c00"></span>MACD ${sig.value.toFixed(3)}</span>`;
+  document.getElementById('legend-macd').innerHTML = mhtml || staticMACD();
+});
+
+window.addEventListener('resize', () => {
+  chart.applyOptions({ width: document.getElementById('chart').clientWidth });
+});
+chart.timeScale().fitContent();
 </script>
 </body>
 </html>
 """
-        # 用 nonce 雜湊取出 0-9 的微擾值加到高度，迫使 Streamlit 認知為「新元件」必重建 iframe
-        _height_jitter = int(_nonce, 16) % 10
-        components.html(full_html, height=820 + _height_jitter, scrolling=False)
+        chart_html = chart_html_template.replace("__PAYLOAD__", payload_json)
+        chart_html = chart_html.replace("__MA_SHORT__", str(ma_short))
+        chart_html = chart_html.replace("__MA_MID__", str(ma_mid))
 
-# ---------- Tab 3: Help ----------
-
-with tab_help:
-    with st.expander("⚠️ 關於資料即時性", expanded=False):
-        st.markdown(
-            """
-- 資料來源：**yfinance**，延遲約 **15–20 分鐘**，並非 tick 即時。
-- **盤中（09:00–13:30）抓資料**：當日 K 棒的「收盤價」其實是「當下最後一筆」，會隨盤跳動，
-  因此**盤中訊號會反覆成立又失效**，僅供觀察、不建議當作進場依據。
-- **建議使用時機**：每日 **14:00 後**抓盤後資料最穩定，當日訊號不會再變動。
-- **快取策略**：
-  - 「重新計算」：清掉計算結果快取（用本地資料重算指標，~1 秒）
-  - 「強制重抓」：清掉本地檔案快取並重打 yfinance（~30 秒，盤中要看最新就用這個）
-            """
-        )
-
-    with st.expander("📚 指標說明（每條規則的定義、意義、限制）", expanded=False):
-        by_cat = {}
-        for rid in RULE_LABELS:
-            cat = cfg_static["rules"].get(rid, {}).get("category", "")
-            by_cat.setdefault(cat, []).append(rid)
-        for cat in CAT_ORDER:
-            rule_ids = by_cat.get(cat, [])
-            if not rule_ids:
-                continue
-            st.markdown(f"#### {cat_zh(cat)}類")
-            for rid in rule_ids:
-                desc = rule_desc(rid)
-                badge = school_badge(get_schools(cfg_static, rid))
-                st.markdown(
-                    f"**{rule_zh(rid)}**　"
-                    f"<span style='background:#eef;padding:2px 6px;border-radius:6px;"
-                    f"font-size:0.75em;color:#446'>{badge}</span>",
-                    unsafe_allow_html=True,
-                )
-                st.markdown(
-                    f"- 怎麼算：{desc['what']}  \n"
-                    f"- 代表意義：{desc['meaning']}  \n"
-                    f"- 注意事項：{desc['caveat']}"
-                )
-            st.markdown("")
-
-    with st.expander("📐 數字來源透明說明", expanded=False):
-        st.markdown(
-            """
-**1. 指標參數 — ✅ 產業標準**
-源自原作者論文（Wilder 1978、Appel、Lane、Bollinger），所有看盤軟體預設值。
-台股 KD 採 9-3-3（國際 Stochastic 多用 14-3-3）。
-
-**2. 進場閾值 — 部分標準、部分啟發式**
-- ✅ Wilder 原著：RSI 30/70、ADX > 25
-- ⚠️ 台股慣用：KD < 30（國際多用 20，因台股波動大）
-- ❌ 啟發式：量能放大 1.5×、ATR 擴張 1.3×
-
-**3. 計分方式 — 純命中數，每條規則平等對待**
-本系統不使用權重；排序就是「符合幾條規則」。
-真正合理的權重需回測校準，未經校準的主觀權重會誤導，所以暫不加權。
-
-**4. 兩派指標來源**
-- **綜合派**（11 條）：MA 黃金交叉、MACD、ADX、KD、RSI、爆量突破、量價齊揚、OBV、布林上下軌、ATR
-- **朱家泓派**（8 條）：均線多頭排列、均線糾結突破、回檔不破月線、量縮回檔紅K放量、長紅K突破、長下影線、變盤線、底部第二隻腳
-
-部分規則（KD、爆量突破、量價齊揚）兩派都使用。
-
-→ **本系統是「過濾候選股的篩選器」，不是「保證進場成功的訊號」**。
-            """
-        )
-
-# ---------- Footer ----------
-st.divider()
-st.markdown(
-    """
-<div style='text-align:center; color:#888; font-size:0.85em; line-height:1.6'>
-本工具僅供技術分析教學與研究輔助 ・ 資料延遲 15-20 分鐘 ・ <b>非投資建議</b><br>
-投資有風險、過往訊號不保證未來績效、使用者須自行承擔投資決策與盈虧責任<br>
-資料源：yfinance ・ 指標實作：純 pandas ・ 計分：純命中數（無主觀權重）
-</div>
-    """,
-    unsafe_allow_html=True,
-)
+        components.html(chart_html, height=820, scrolling=False)
