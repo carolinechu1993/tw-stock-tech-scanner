@@ -181,6 +181,9 @@ universe_zh_map = {
 def build_all_universe_options():
     """Group all universe options. Returns list[(key, display_label)]."""
     out: list[tuple[str, str]] = []
+    # 自訂與觀察清單（最常用，放最上面）
+    out.append((UNIVERSE_WATCHLIST, "⭐ 我的觀察清單"))
+    out.append((UNIVERSE_CUSTOM, "✍️ 自訂股票"))
     # 預設精選池
     for k in cfg_static["universe"].keys():
         out.append((k, "📦 " + universe_zh_map.get(k, k)))
@@ -193,9 +196,6 @@ def build_all_universe_options():
     # ETF 成分股
     for key, label in dyn_univ.list_etfs():
         out.append((f"etf:{key}", "🪙 " + label))
-    # 自訂與觀察清單
-    out.append((UNIVERSE_WATCHLIST, "⭐ 我的觀察清單"))
-    out.append((UNIVERSE_CUSTOM, "✍️ 自訂股票"))
     return out
 
 
