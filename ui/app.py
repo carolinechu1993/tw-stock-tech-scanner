@@ -81,23 +81,29 @@ st.markdown(
 /* Desktop default (>768px): larger fonts, more breathing room */
 .block-container {
   padding-top: 1.2rem !important;
-  padding-bottom: 2.5rem;
-  max-width: 1400px;
+  padding-bottom: 3rem;
+  max-width: 1480px;
 }
 html, body, [class*="st-"] { font-size: 16px; }
-h1 { margin-bottom: 0.6rem; font-size: 1.9rem; }
-h2 { font-size: 1.4rem; margin-top: 1rem; }
-h3 { font-size: 1.15rem; margin-top: 0.8rem; }
-.stDataFrame { font-size: 0.95rem; }
-.stDataFrame th, .stDataFrame td { padding: 0.5rem 0.7rem !important; }
+h1 { margin-bottom: 0.6rem; font-size: 2rem; }
+h2 { font-size: 1.5rem; margin-top: 1.2rem; }
+h3 { font-size: 1.2rem; margin-top: 0.9rem; }
+h4 { font-size: 1.05rem; margin-top: 0.7rem; }
+.stDataFrame { font-size: 1rem; }
+.stDataFrame th, .stDataFrame td { padding: 0.6rem 0.8rem !important; }
 .stTabs [data-baseweb="tab"] {
-  padding: 0.7rem 1.2rem;
-  font-size: 1.05rem;
+  padding: 0.8rem 1.4rem;
+  font-size: 1.1rem;
+  font-weight: 500;
 }
-.stMarkdown p { line-height: 1.6; }
+.stTabs [data-baseweb="tab-list"] { gap: 0.3rem; }
+.stMarkdown p { line-height: 1.65; }
 [data-testid="stSidebar"] [data-testid="stMarkdown"] { font-size: 0.95rem; }
 .stCheckbox label { font-size: 0.95rem; }
-[data-testid="stDataFrameResizable"] { font-size: 0.95rem; }
+[data-testid="stDataFrameResizable"] { font-size: 1rem; }
+.stSelectbox label, .stMultiSelect label { font-size: 1rem !important; font-weight: 500; }
+[data-baseweb="select"] { font-size: 1rem; }
+.stCaption, [data-testid="stCaptionContainer"] { font-size: 0.85rem; color: #777; }
 
 /* Mobile (<768px): compact */
 @media (max-width: 768px) {
@@ -874,19 +880,19 @@ with tab_detail:
 
         # ---- Layout ----
         fig.update_layout(
-            height=720,
+            height=760,
             xaxis_rangeslider_visible=False,
             showlegend=True,
             hovermode="x unified",
             hoverlabel=dict(
-                bgcolor="rgba(255,255,255,0.96)",
+                bgcolor="rgba(255,255,255,0.97)",
                 bordercolor="#888",
-                font=dict(size=13, color="#222"),
+                font=dict(size=14, color="#222"),
                 namelength=-1,
             ),
             legend=dict(
                 orientation="h",
-                yanchor="bottom", y=1.06,
+                yanchor="bottom", y=1.05,
                 xanchor="left", x=0,
                 font=dict(size=14),
                 bgcolor="rgba(255,255,255,0.85)",
@@ -895,19 +901,25 @@ with tab_detail:
                 bordercolor="#e5e5e5",
                 borderwidth=1,
             ),
-            margin=dict(l=60, r=20, t=80, b=40),
+            margin=dict(l=70, r=30, t=80, b=50),
             plot_bgcolor="white",
             paper_bgcolor="white",
-            font=dict(size=12),
+            font=dict(size=13),
         )
-        # Smaller subplot titles
+        # Subplot titles
         for ann in fig["layout"]["annotations"]:
-            ann["font"] = dict(size=12, color="#333")
+            ann["font"] = dict(size=14, color="#1f3a5f")
             ann["x"] = 0.0
             ann["xanchor"] = "left"
-        # Grid styling
-        fig.update_xaxes(showgrid=True, gridcolor=CL["grid"], gridwidth=1)
-        fig.update_yaxes(showgrid=True, gridcolor=CL["grid"], gridwidth=1)
+        # Grid + tick font styling
+        fig.update_xaxes(
+            showgrid=True, gridcolor=CL["grid"], gridwidth=1,
+            tickfont=dict(size=12),
+        )
+        fig.update_yaxes(
+            showgrid=True, gridcolor=CL["grid"], gridwidth=1,
+            tickfont=dict(size=12),
+        )
         # Hide weekend gaps for daily K
         fig.update_xaxes(rangebreaks=[dict(bounds=["sat", "mon"])])
 
@@ -1001,8 +1013,7 @@ with tab_detail:
 </body>
 </html>
 """
-        components.html(full_html, height=780, scrolling=False)
-        st.caption("💡 滑鼠移到圖上 → 一條藍色實線貫穿 K / 量 / KD / MACD 四個子圖")
+        components.html(full_html, height=820, scrolling=False)
 
 # ---------- Tab 3: Help ----------
 
