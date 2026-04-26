@@ -48,41 +48,53 @@ def _init_local_storage():
     """Sync session_state with browser localStorage.
 
     streamlit-local-storage 的 iframe 載入是 async — 第一次呼叫 getItem 通常回 None，
-    要等元件初始化完成才會收到資料。所以每次 rerun 都嘗試讀，只在成功讀到資料前
-    持續從 localStorage 同步；一旦讀到（_wl_synced/_text_synced=True），之後就以
-    session_state 為主（不被 localStorage 重複覆蓋掉使用者剛改的內容）。
+    要等元件初始化完成才會收到資料。每次 rerun 都嘗試讀，直到讀到非 None 為止。
+    每個 getItem/setItem 必須有**唯一 key**，否則多次呼叫會在同一 component slot 互相干擾。
     """
-    # 預設值（避免之後讀 session_state 出 KeyError）
+    # 預設值
     if "watchlist" not in st.session_state:
         st.session_state.watchlist = []
     if "custom_text" not in st.session_state:
         st.session_state.custom_text = ""
 
-    # 觀察清單：第一次成功讀到 localStorage 為準
+    # 觀察清單同步：用唯一 key
     if not st.session_state.get("_wl_synced"):
-        raw_wl = _LS.getItem(WATCHLIST_KEY)
+        raw_wl = _LS.getItem(WATCHLIST_KEY, key="get_watchlist")
         if raw_wl is not None:
             try:
                 st.session_state.watchlist = json.loads(raw_wl) or []
-                st.session_state._wl_synced = True
             except Exception:
-                # 壞資料就視為已同步，避免無限重試
-                st.session_state._wl_synced = True
+                pass
+            st.session_state._wl_synced = True
 
-    # 自訂股票文字：同樣模式
+    # 自訂股票文字
     if not st.session_state.get("_text_synced"):
-        raw_text = _LS.getItem(CUSTOM_TEXT_KEY)
+        raw_text = _LS.getItem(CUSTOM_TEXT_KEY, key="get_custom_text")
         if raw_text is not None:
             st.session_state.custom_text = raw_text
             st.session_state._text_synced = True
 
 
 def save_watchlist():
-    _LS.setItem(WATCHLIST_KEY, json.dumps(st.session_state.watchlist))
+    """寫入 localStorage — 用每次都不同的 key 確保 component 真的執行。"""
+    # 用 watchlist 內容雜湊 + 計數器當 key 後綴，避免「同 key 同 value 不重發」
+    counter = st.session_state.get("_save_wl_counter", 0) + 1
+    st.session_state["_save_wl_counter"] = counter
+    _LS.setItem(
+        WATCHLIST_KEY,
+        json.dumps(st.session_state.watchlist),
+        key=f"set_watchlist_{counter}",
+    )
 
 
 def save_custom_text():
-    _LS.setItem(CUSTOM_TEXT_KEY, st.session_state.get("custom_text", ""))
+    counter = st.session_state.get("_save_text_counter", 0) + 1
+    st.session_state["_save_text_counter"] = counter
+    _LS.setItem(
+        CUSTOM_TEXT_KEY,
+        st.session_state.get("custom_text", ""),
+        key=f"set_custom_text_{counter}",
+    )
 
 st.set_page_config(
     page_title="台股技術分析掃描",
