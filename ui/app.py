@@ -888,23 +888,14 @@ with tab_detail:
         # Hide weekend gaps for daily K
         fig.update_xaxes(rangebreaks=[dict(bounds=["sat", "mon"])])
 
-        # 強化 spike 跨子圖（在 raw plotly HTML 中真的會跨）
-        fig.update_xaxes(
-            showspikes=True,
-            spikecolor="#1f3a5f",
-            spikethickness=1.5,
-            spikedash="solid",
-            spikemode="across",
-            spikesnap="cursor",
-        )
-        fig.update_layout(spikedistance=-1, hoverdistance=100)
-
-        # 用 components.html 直接 embed plotly HTML，繞過 Streamlit 的 plotly 包裝
-        # 這樣 hovermode="x unified" + spike across 才會在多子圖正確跨行畫線
+        # 直接 embed 並 inject JS：監聽 plotly_hover，用 paper-coordinate shape
+        # 強制畫一條跨整張圖（含所有子圖）的垂直線
+        plot_id = f"chart-{selected.replace('.', '-')}"
         chart_html = pio.to_html(
             fig,
             include_plotlyjs="cdn",
             full_html=False,
+            div_id=plot_id,
             config={
                 "displayModeBar": True,
                 "displaylogo": False,
@@ -912,8 +903,36 @@ with tab_detail:
                 "scrollZoom": True,
             },
         )
-        components.html(chart_html, height=760, scrolling=False)
-        st.caption("💡 滑鼠移到圖上即可看到貫穿四個子圖的垂直線與所有指標數值")
+
+        crosshair_js = f"""
+<script>
+(function() {{
+    function init() {{
+        var gd = document.getElementById("{plot_id}");
+        if (!gd || !gd.on) {{ setTimeout(init, 100); return; }}
+        var baseShapes = (gd.layout && gd.layout.shapes)
+            ? JSON.parse(JSON.stringify(gd.layout.shapes)) : [];
+        gd.on("plotly_hover", function(data) {{
+            if (!data.points || !data.points.length) return;
+            var x = data.points[0].x;
+            var hoverLine = {{
+                type: "line", xref: "x", yref: "paper",
+                x0: x, x1: x, y0: 0, y1: 1,
+                line: {{ color: "#1f3a5f", width: 1.5 }},
+                opacity: 0.85
+            }};
+            Plotly.relayout(gd, {{ shapes: baseShapes.concat([hoverLine]) }});
+        }});
+        gd.on("plotly_unhover", function() {{
+            Plotly.relayout(gd, {{ shapes: baseShapes }});
+        }});
+    }}
+    init();
+}})();
+</script>
+"""
+        components.html(chart_html + crosshair_js, height=760, scrolling=False)
+        st.caption("💡 滑鼠移到圖上 → 一條藍色實線貫穿 K / 量 / KD / MACD 四個子圖")
 
 # ---------- Tab 3: Help ----------
 
