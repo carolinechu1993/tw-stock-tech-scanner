@@ -153,3 +153,26 @@ rules:
   long_lower_shadow:       { enabled: true, category: pattern,    schools: [zhu] }
   doji_or_spinning_top:    { enabled: true, category: pattern,    schools: [zhu] }
   double_bottom:           { enabled: true, category: pattern,    schools: [zhu] }
+  # ===== 反向（出場/空頭）訊號 =====
+  # 趨勢類 反向
+  ma_death_cross:          { enabled: true, category: trend,      schools: [general] }
+  ma_bearish_alignment:    { enabled: true, category: trend,      schools: [zhu] }
+  ma_converge_breakdown:   { enabled: true, category: trend,      schools: [zhu] }
+  rebound_caps_ma20:       { enabled: true, category: trend,      schools: [zhu] }
+  macd_hist_turn_negative: { enabled: true, category: trend,      schools: [general] }
+  adx_strong_downtrend:    { enabled: true, category: trend,      schools: [general] }
+  # 動能類 反向
+  kd_overbought_dead:      { enabled: true, category: momentum,   schools: [general, zhu] }
+  rsi_overbought_drop:     { enabled: true, category: momentum,   schools: [general] }
+  # 量價類 反向
+  volume_breakdown:        { enabled: true, category: volume,     schools: [general, zhu] }
+  price_volume_collapse:   { enabled: true, category: volume,     schools: [general, zhu] }
+  obv_new_low:             { enabled: true, category: volume,     schools: [general] }
+  volume_dry_black_surge:  { enabled: true, category: volume,     schools: [zhu] }
+  # 波動類 反向
+  bbands_upper_reject:     { enabled: true, category: volatility, schools: [general] }
+  bbands_lower_break:      { enabled: true, category: volatility, schools: [general] }
+  # 型態類 反向
+  long_black_breakdown:    { enabled: true, category: pattern,    schools: [zhu] }
+  long_upper_shadow:       { enabled: true, category: pattern,    schools: [zhu] }
+  double_top:              { enabled: true, category: pattern,    schools: [zhu] }

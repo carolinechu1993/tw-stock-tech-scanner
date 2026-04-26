@@ -257,6 +257,12 @@ def select_school(school):
     _set_selection(lambda rid: school in get_schools(cfg_static, rid))
 
 
+def select_direction(direction):
+    """direction: 'bullish' / 'bearish' — 套用該方向所有規則（包含 neutral 雙向通用）。"""
+    from src.signals.labels import RULE_DIRECTION
+    _set_selection(lambda rid: RULE_DIRECTION.get(rid, "neutral") in (direction, "neutral"))
+
+
 with st.sidebar:
     st.header("掃描設定")
     _all_options = build_all_universe_options()
@@ -374,6 +380,15 @@ with st.sidebar:
     sc2.button("朱家泓派", on_click=select_school, args=("zhu",),
                use_container_width=True, key="btn_school_zhu",
                help="選取所有屬於朱家泓派的規則")
+
+    st.markdown("**方向套用**")
+    dc1, dc2 = st.columns(2)
+    dc1.button("🔼 多頭訊號", on_click=select_direction, args=("bullish",),
+               use_container_width=True, key="btn_dir_bullish",
+               help="只勾選多頭/進場規則（含雙向通用）")
+    dc2.button("🔽 空頭訊號", on_click=select_direction, args=("bearish",),
+               use_container_width=True, key="btn_dir_bearish",
+               help="只勾選空頭/出場規則（含雙向通用）")
 
     cc1, cc2, cc3 = st.columns(3)
     cc1.button("預設", on_click=reset_to_default,
@@ -704,6 +719,29 @@ with tab_detail:
             "long_lower_shadow":       dict(pane=0, shape="arrowUp", pos="belowBar", color="#1565c0", text="止跌"),
             "doji_or_spinning_top":    dict(pane=0, shape="circle",  pos="inBar",    color="#6a1b9a", text="變盤"),
             "double_bottom":           dict(pane=0, shape="arrowUp", pos="belowBar", color="#e91e63", text="W底"),
+            # ===== 空頭/出場訊號（arrowDown + 冷色系）=====
+            # 趨勢類 反向
+            "ma_death_cross":          dict(pane=0, shape="arrowDown", pos="aboveBar", color="#5e35b1", text="死叉"),
+            "ma_bearish_alignment":    dict(pane=0, shape="arrowDown", pos="aboveBar", color="#3949ab", text="空排"),
+            "ma_converge_breakdown":   dict(pane=0, shape="arrowDown", pos="aboveBar", color="#283593", text="糾結跌破"),
+            "rebound_caps_ma20":       dict(pane=0, shape="circle",   pos="inBar",    color="#455a64", text="月線壓"),
+            "macd_hist_turn_negative": dict(pane=3, shape="arrowDown", pos="aboveBar", color="#37474f", text="MACD翻綠"),
+            "adx_strong_downtrend":    dict(pane=0, shape="circle",   pos="aboveBar", color="#37474f", text="ADX空"),
+            # 動能類 反向
+            "kd_overbought_dead":      dict(pane=2, shape="arrowDown", pos="aboveBar", color="#4527a0", text="KD死叉"),
+            "rsi_overbought_drop":     dict(pane=2, shape="circle",   pos="inBar",    color="#546e7a", text="RSI落"),
+            # 量價類 反向
+            "volume_breakdown":        dict(pane=1, shape="arrowDown", pos="aboveBar", color="#00695c", text="爆量殺"),
+            "price_volume_collapse":   dict(pane=1, shape="arrowDown", pos="aboveBar", color="#37474f", text="量增跌"),
+            "obv_new_low":             dict(pane=0, shape="square",   pos="aboveBar", color="#1a237e", text="OBV低"),
+            "volume_dry_black_surge":  dict(pane=1, shape="arrowDown", pos="aboveBar", color="#263238", text="縮量起跌"),
+            # 波動類 反向
+            "bbands_upper_reject":     dict(pane=0, shape="arrowDown", pos="aboveBar", color="#1a237e", text="上軌壓"),
+            "bbands_lower_break":      dict(pane=0, shape="arrowDown", pos="belowBar", color="#616161", text="跌破下軌"),
+            # 型態類 反向
+            "long_black_breakdown":    dict(pane=0, shape="arrowDown", pos="aboveBar", color="#283593", text="長黑"),
+            "long_upper_shadow":       dict(pane=0, shape="arrowDown", pos="aboveBar", color="#00695c", text="止漲"),
+            "double_top":              dict(pane=0, shape="arrowDown", pos="aboveBar", color="#3e2723", text="M頭"),
         }
         SHAPE_SYM = {"arrowUp": "↑", "arrowDown": "↓", "circle": "●", "square": "■"}
 
