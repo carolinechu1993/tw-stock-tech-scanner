@@ -28,6 +28,7 @@ from src.signals.labels import (
     rule_zh, cat_zh, school_zh, rule_desc,
 )
 from src.universe.utils import parse_tickers, validate_tickers, to_universe
+from src.universe import dynamic as dyn_univ
 
 
 def get_schools(cfg, rule_id):
@@ -118,7 +119,7 @@ UNIVERSE_CUSTOM = "__custom__"
 
 universe_zh_map = {
     "test_10": "測試組（10 檔大型權值）",
-    "semiconductor": "半導體族群",
+    "semiconductor": "半導體族群（精選）",
     "shipping": "航運族群",
     "finance": "金融股",
     "ai_server": "AI 伺服器族群",
@@ -127,13 +128,38 @@ universe_zh_map = {
 }
 
 
+def build_all_universe_options():
+    """Group all universe options. Returns list[(key, display_label)]."""
+    out: list[tuple[str, str]] = []
+    # 預設精選池
+    for k in cfg_static["universe"].keys():
+        out.append((k, "📦 " + universe_zh_map.get(k, k)))
+    # 產業 / 大池（動態，需網路 — TWSE OpenAPI）
+    for key, label in dyn_univ.list_groups():
+        if key.startswith("all_"):
+            out.append((f"dyn:{key}", "🌐 " + label))
+        else:
+            out.append((f"dyn:{key}", "🏭 " + label))
+    # ETF 成分股
+    for key, label in dyn_univ.list_etfs():
+        out.append((f"etf:{key}", "🪙 " + label))
+    # 自訂與觀察清單
+    out.append((UNIVERSE_WATCHLIST, "⭐ 我的觀察清單"))
+    out.append((UNIVERSE_CUSTOM, "✍️ 自訂股票"))
+    return out
+
+
 def universe_label(k: str) -> str:
+    options = build_all_universe_options()
+    label_map = {key: label for key, label in options}
+    base = label_map.get(k, k)
+    # 動態加數量註記
     if k == UNIVERSE_WATCHLIST:
         n = len(st.session_state.get("watchlist", []))
-        return f"⭐ 我的觀察清單 ({n})"
+        return f"{base} ({n})"
     if k == UNIVERSE_CUSTOM:
-        return "✍️ 自訂股票"
-    return universe_zh_map.get(k, k)
+        return base
+    return base
 
 
 def build_universe(universe_key: str):
@@ -154,6 +180,19 @@ def build_universe(universe_key: str):
         if truncated:
             st.warning(f"⚠️ 超過 {WATCHLIST_LIMIT} 檔上限，已截斷至 {WATCHLIST_LIMIT} 檔")
         return to_universe(symbols), None
+    if universe_key.startswith("dyn:"):
+        try:
+            universe = dyn_univ.resolve_industry_group(universe_key[4:])
+        except Exception as e:
+            return None, f"⚠️ 抓取 TWSE 公司清單失敗：{e}"
+        if not universe:
+            return None, "⚠️ 該分類無資料"
+        return universe, None
+    if universe_key.startswith("etf:"):
+        universe = dyn_univ.resolve_etf(universe_key[4:])
+        if not universe:
+            return None, "⚠️ 找不到該 ETF 的成分股"
+        return universe, None
     return cfg_static["universe"][universe_key], None
 
 if "force_counter" not in st.session_state:
@@ -192,15 +231,14 @@ def select_school(school):
 
 with st.sidebar:
     st.header("掃描設定")
-    universe_options = (
-        list(cfg_static["universe"].keys())
-        + [UNIVERSE_WATCHLIST, UNIVERSE_CUSTOM]
-    )
+    _all_options = build_all_universe_options()
+    universe_options = [k for k, _ in _all_options]
     universe_key = st.selectbox(
         "股票池",
         universe_options,
         index=0,
         format_func=universe_label,
+        help="📦 精選 / 🏭 產業 / 🌐 全市場 / 🪙 ETF / ⭐ 觀察 / ✍️ 自訂",
     )
 
     # Custom textarea (only when custom selected)
@@ -218,6 +256,16 @@ with st.sidebar:
     elif universe_key == UNIVERSE_WATCHLIST:
         wl_n = len(st.session_state.get("watchlist", []))
         st.caption(f"共 {wl_n} 檔")
+    elif universe_key.startswith("dyn:") or universe_key.startswith("etf:"):
+        # Resolve count without scanning (lookup is fast, cached daily)
+        try:
+            preview, _ = build_universe(universe_key)
+            n = len(preview) if preview else 0
+            st.caption(f"共 {n} 檔")
+            if n > 200:
+                st.caption(f"⏱ 大池子（{n} 檔），首次掃描需 1-3 分鐘")
+        except Exception:
+            st.caption("（計算中…）")
     else:
         st.caption(f"共 {len(cfg_static['universe'][universe_key])} 檔")
 
@@ -333,7 +381,7 @@ with st.sidebar:
 
 # ---------- Scan ----------
 
-@st.cache_data(ttl=600, show_spinner="抓取資料並計算指標中...")
+@st.cache_data(ttl=600, show_spinner=False)
 def run_scan(universe_tuple: tuple, force_refresh: bool, _cache_buster: int,
              enabled_rules: tuple):
     cfg = load_config(ROOT / "config.yaml")
@@ -361,9 +409,16 @@ if universe_err:
 universe_tuple = tuple((d["symbol"], d.get("name", d["symbol"])) for d in universe_list)
 
 force_now = st.session_state.force_counter > 0
-ranking, details, scan_ts = run_scan(
-    universe_tuple, force_now, st.session_state.force_counter, enabled_tuple
+n_total = len(universe_tuple)
+spinner_msg = (
+    f"抓取資料並計算指標中（{n_total} 檔）…"
+    if n_total <= 50
+    else f"抓取資料並計算指標中（{n_total} 檔，分批避免被擋，預計 {max(1, n_total // 50)} 分鐘）…"
 )
+with st.spinner(spinner_msg):
+    ranking, details, scan_ts = run_scan(
+        universe_tuple, force_now, st.session_state.force_counter, enabled_tuple
+    )
 st.session_state.force_counter = 0
 
 if ranking.empty:
