@@ -623,18 +623,17 @@ with tab_detail:
                                  if r.hit and name in marker_supported]
         marker_options = [r for r in marker_supported]
 
-        # 切換股票時 → 直接覆蓋 multiselect 值為當前股的 hits
-        if st.session_state.get("_marker_last_stock") != selected:
-            st.session_state["marker_select"] = list(today_hit_with_marker)
-            st.session_state["_marker_last_stock"] = selected
+        # 每檔股票獨立的 multiselect key — 切股自動拿該股的初始預設（命中規則）
+        # 用戶在同一檔內的手動加減會記住；切到別檔不互相影響
+        marker_key = f"marker_select__{selected.replace('.', '_')}"
 
         chosen_markers = st.multiselect(
             "🎯 在圖上標記訊號（依當前個股命中狀態自動勾選）",
             options=marker_options,
             default=today_hit_with_marker,
             format_func=lambda r: f"{rule_zh(r)}（{rule_summary(r)}）",
-            help="預設勾選此股今日命中的規則；切換股票會自動重置；可手動加減看歷史觸發點。",
-            key="marker_select",
+            help="預設勾選此股今日命中的規則；可手動加減；同一檔內變更會記住。",
+            key=marker_key,
         )
 
 
