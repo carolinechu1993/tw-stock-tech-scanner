@@ -267,6 +267,7 @@ with st.sidebar:
         index=0,
         format_func=universe_label,
         help="📦 精選 / 🏭 產業 / 🌐 全市場 / 🪙 ETF / ⭐ 觀察 / ✍️ 自訂",
+        key="universe_select",
     )
 
     # Custom textarea (only when custom selected)
