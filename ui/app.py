@@ -491,8 +491,22 @@ tab_rank, tab_detail, tab_help = st.tabs(["📊 排行榜", "🔍 個股詳情",
 # ---------- Tab 1: Ranking ----------
 
 with tab_rank:
+    # Compute most common data date for caption
+    if "資料日" in display_df.columns and not display_df["資料日"].dropna().empty:
+        date_series = display_df["資料日"].dropna()
+        mode_date = date_series.mode().iloc[0]
+        n_match = int((date_series == mode_date).sum())
+        n_total_rows = len(display_df)
+        date_caption = (
+            f"📅 資料日：{mode_date}"
+            + (f" ({n_match}/{n_total_rows} 檔)" if n_match < n_total_rows else "")
+        )
+    else:
+        date_caption = "📅 資料日：—"
+
     st.caption(
-        f"掃描時間：{scan_ts}　|　使用 {len(enabled_tuple)} / {len(RULE_LABELS)} 條規則"
+        f"掃描時間：{scan_ts}　|　{date_caption}　|　"
+        f"使用 {len(enabled_tuple)} / {len(RULE_LABELS)} 條規則"
         "　|　勾選 ⭐ 即加入觀察清單，取消即移除"
     )
     # Build name lookup (for sync after editing)
@@ -505,10 +519,10 @@ with tab_rank:
     edit_df.insert(0, "⭐", edit_df["代號"].apply(lambda s: s in existing_syms))
 
     if compact_mode:
-        rank_cols = ["⭐"] + [c for c in ["代號", "名稱", "收盤價", "命中數", "資料日"]
+        rank_cols = ["⭐"] + [c for c in ["代號", "名稱", "收盤價", "命中數"]
                               if c in edit_df.columns]
     else:
-        rank_cols = ["⭐"] + cols_order
+        rank_cols = ["⭐"] + [c for c in cols_order if c != "資料日"]
 
     rank_col_config = {
         "⭐": st.column_config.CheckboxColumn(
