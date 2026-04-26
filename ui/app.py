@@ -25,7 +25,7 @@ from src.indicators.momentum import kd_taiwan, rsi
 from src.indicators.volatility import bbands
 from src.signals.labels import (
     RULE_LABELS, CATEGORY_LABELS, SCHOOL_LABELS,
-    rule_zh, cat_zh, school_zh, rule_desc,
+    rule_zh, cat_zh, school_zh, rule_desc, rule_summary,
 )
 from src.universe.utils import parse_tickers, validate_tickers, to_universe
 from src.universe import dynamic as dyn_univ
@@ -71,26 +71,48 @@ st.set_page_config(
     initial_sidebar_state="auto",
 )
 
-# ---------- Mobile-friendly CSS ----------
+# ---------- Responsive CSS (desktop comfort + mobile compact) ----------
 st.markdown(
     """
 <style>
-.block-container { padding-top: 1rem !important; padding-bottom: 2rem; }
-h1 { margin-bottom: 0.4rem; font-size: 1.6rem; }
+/* Desktop default (>768px): larger fonts, more breathing room */
+.block-container {
+  padding-top: 1.2rem !important;
+  padding-bottom: 2.5rem;
+  max-width: 1400px;
+}
+html, body, [class*="st-"] { font-size: 16px; }
+h1 { margin-bottom: 0.6rem; font-size: 1.9rem; }
+h2 { font-size: 1.4rem; margin-top: 1rem; }
+h3 { font-size: 1.15rem; margin-top: 0.8rem; }
+.stDataFrame { font-size: 0.95rem; }
+.stDataFrame th, .stDataFrame td { padding: 0.5rem 0.7rem !important; }
+.stTabs [data-baseweb="tab"] {
+  padding: 0.7rem 1.2rem;
+  font-size: 1.05rem;
+}
+.stMarkdown p { line-height: 1.6; }
+[data-testid="stSidebar"] [data-testid="stMarkdown"] { font-size: 0.95rem; }
+.stCheckbox label { font-size: 0.95rem; }
+[data-testid="stDataFrameResizable"] { font-size: 0.95rem; }
+
+/* Mobile (<768px): compact */
 @media (max-width: 768px) {
   .block-container { padding-left: 0.6rem !important; padding-right: 0.6rem !important; }
+  html, body, [class*="st-"] { font-size: 14px; }
   h1 { font-size: 1.3rem; }
   h2 { font-size: 1.05rem; }
   h3 { font-size: 0.95rem; }
   [data-testid="stSidebar"] { min-width: 260px !important; }
   .stTabs [data-baseweb="tab"] { padding: 0.4rem 0.6rem; font-size: 0.9rem; }
+  .stDataFrame { font-size: 0.82rem; }
 }
-.stDataFrame { font-size: 0.85rem; }
+
 .disclaimer-banner {
   background:#fff5f5; border-left:3px solid #ff4b4b;
-  padding:0.4rem 0.7rem; border-radius:4px;
-  font-size:0.78rem; color:#666; line-height:1.4;
-  margin-bottom:0.6rem;
+  padding:0.5rem 0.9rem; border-radius:4px;
+  font-size:0.85rem; color:#666; line-height:1.5;
+  margin-bottom:0.8rem;
 }
 </style>
     """,
@@ -471,15 +493,29 @@ tab_rank, tab_detail, tab_help = st.tabs(["📊 排行榜", "🔍 個股詳情",
 with tab_rank:
     st.caption(
         f"掃描時間：{scan_ts}　|　使用 {len(enabled_tuple)} / {len(RULE_LABELS)} 條規則"
+        "　|　勾選 ⭐ 即加入觀察清單，取消即移除"
     )
+    # Build name lookup (for sync after editing)
+    name_lookup = {row["symbol"]: row.get("name", row["symbol"])
+                   for _, row in ranking.iterrows() if "symbol" in row}
+    existing_syms = {item["symbol"] for item in st.session_state.get("watchlist", [])}
+
+    # Pre-populate ⭐ column
+    edit_df = display_df.copy()
+    edit_df.insert(0, "⭐", edit_df["代號"].apply(lambda s: s in existing_syms))
+
     if compact_mode:
-        compact_cols = [c for c in ["代號", "名稱", "收盤價", "命中數", "資料日"]
-                        if c in display_df.columns]
-        rank_cols = compact_cols
+        rank_cols = ["⭐"] + [c for c in ["代號", "名稱", "收盤價", "命中數", "資料日"]
+                              if c in edit_df.columns]
     else:
-        rank_cols = cols_order
+        rank_cols = ["⭐"] + cols_order
 
     rank_col_config = {
+        "⭐": st.column_config.CheckboxColumn(
+            "⭐",
+            help="勾選加入觀察清單；取消移除",
+            default=False,
+        ),
         "代號": st.column_config.TextColumn("代號", width="small"),
         "名稱": st.column_config.TextColumn("名稱", width="small"),
         "收盤價": st.column_config.NumberColumn("收盤價", width="small", format="%.2f"),
@@ -489,39 +525,31 @@ with tab_rank:
         "分類分布": st.column_config.TextColumn("分類分布", width="medium"),
         "錯誤": st.column_config.TextColumn("錯誤", width="medium"),
     }
-    st.dataframe(
-        display_df[rank_cols],
+    edited = st.data_editor(
+        edit_df[rank_cols],
         width="stretch",
         hide_index=True,
         column_config={k: v for k, v in rank_col_config.items() if k in rank_cols},
+        disabled=[c for c in rank_cols if c != "⭐"],
+        key="ranking_editor",
     )
 
-    # ⭐ Add to watchlist
-    st.divider()
-    st.markdown("**⭐ 從本次排行榜加入觀察清單**")
-    name_lookup = {row["symbol"]: row.get("name", row["symbol"])
-                   for _, row in ranking.iterrows() if "symbol" in row}
-    existing_syms = {item["symbol"] for item in st.session_state.get("watchlist", [])}
-    selectable_syms = [s for s in name_lookup if s not in existing_syms]
-    add_col, btn_col = st.columns([3, 1])
-    selected_to_add = add_col.multiselect(
-        "選股加入",
-        options=selectable_syms,
-        format_func=lambda s: f"{s} {name_lookup.get(s, '')}",
-        label_visibility="collapsed",
-        placeholder="從排行榜選擇要加入的股票…",
-    )
-    if btn_col.button("加入", key="btn_add_to_wl",
-                      use_container_width=True,
-                      disabled=not selected_to_add):
-        wl = st.session_state.watchlist
-        for s in selected_to_add:
-            if len(wl) >= WATCHLIST_LIMIT:
-                st.warning(f"⚠️ 觀察清單已滿（{WATCHLIST_LIMIT} 檔上限）")
-                break
-            wl.append({"symbol": s, "name": name_lookup.get(s, s)})
+    # Sync watchlist with checkbox state
+    new_starred = set(edited.loc[edited["⭐"], "代號"].astype(str))
+    old_starred = existing_syms
+    if new_starred != old_starred:
+        # Preserve order: keep existing watchlist items that are still starred
+        current_wl = list(st.session_state.get("watchlist", []))
+        kept = [item for item in current_wl if item["symbol"] in new_starred]
+        # Append newly starred (not in old)
+        for sym in edited.loc[edited["⭐"], "代號"].astype(str):
+            if sym not in old_starred and not any(x["symbol"] == sym for x in kept):
+                if len(kept) >= WATCHLIST_LIMIT:
+                    st.warning(f"⚠️ 觀察清單已達上限 {WATCHLIST_LIMIT} 檔，未加入 {sym}")
+                    break
+                kept.append({"symbol": sym, "name": name_lookup.get(sym, sym)})
+        st.session_state.watchlist = kept
         save_watchlist()
-        st.success(f"已加入 {len(selected_to_add)} 檔到觀察清單")
         st.rerun()
 
 # ---------- Tab 2: Per-stock detail ----------
@@ -543,13 +571,11 @@ with tab_detail:
         hit_rows = []
         for name, r in results.items():
             cfg_r = rule_cfg.get(name, {})
-            desc = rule_desc(name)
             hit_rows.append({
                 "規則": rule_zh(name),
                 "分類": cat_zh(cfg_r.get("category", "")),
                 "命中": "✅" if r.hit else "—",
-                "計算說明": r.detail,
-                "意義": desc.get("meaning", ""),
+                "意義": rule_summary(name),
             })
         hit_table = pd.DataFrame(hit_rows)
         if compact_mode:
@@ -557,11 +583,11 @@ with tab_detail:
         else:
             hit_cols = list(hit_table.columns)
         hit_col_config = {
-            "規則":     st.column_config.TextColumn("規則", width="medium"),
-            "分類":     st.column_config.TextColumn("分類", width="small"),
-            "命中":     st.column_config.TextColumn("命中", width="small"),
-            "計算說明": st.column_config.TextColumn("計算說明", width="medium"),
-            "意義":     st.column_config.TextColumn("意義", width="large"),
+            "規則": st.column_config.TextColumn("規則", width="medium"),
+            "分類": st.column_config.TextColumn("分類", width="small"),
+            "命中": st.column_config.TextColumn("命中", width="small"),
+            "意義": st.column_config.TextColumn("意義", width="medium",
+                                                  help="精簡摘要；完整定義請看「📖 說明」分頁"),
         }
         st.dataframe(
             hit_table[hit_cols],
